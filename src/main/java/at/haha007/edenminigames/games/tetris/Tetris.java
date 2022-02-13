@@ -1,12 +1,15 @@
 package at.haha007.edenminigames.games.tetris;
 
+import at.haha007.edencommands.tree.node.LiteralCommandNode;
 import at.haha007.edenminigames.EdenMinigames;
 import at.haha007.edenminigames.Minigame;
 import at.haha007.edenminigames.Utils;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.math.BlockVector2;
+import com.sk89q.worldedit.math.BlockVector3;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
@@ -17,9 +20,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
 public class Tetris extends Minigame implements Listener {
     //scroll up   -> move left
@@ -31,7 +32,7 @@ public class Tetris extends Minigame implements Listener {
     private Player player;
     private final int taskId;
     private Tetromino[][] field;
-    private final Display display;
+    private Display display;
     private Tetromino falling;
     private BlockVector2 fallingPos;
     private int rotation;
@@ -39,9 +40,24 @@ public class Tetris extends Minigame implements Listener {
     private int score;
     private int tick;
     private int totalTicks = 1;
+    private Queue<Tetromino> bag;
+    private Tetromino next;
 
     protected Tetris() {
         super("tetris");
+        command.then(LiteralCommandNode.literal("location").executes(c -> {
+            if (!(c.getSender() instanceof Player player)) {
+                c.getSender().sendMessage("This command can only be executed by players!");
+                return;
+            }
+            Location loc = player.getLocation();
+
+            cfg.set("location", "%d,%d,%d".formatted(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ()));
+            display = new Display(BlockVector3.at(loc.getX(), loc.getY(), loc.getZ()), BukkitAdapter.adapt(loc.getWorld()));
+
+            EdenMinigames.instance().saveConfig();
+            player.sendMessage("Location updated.");
+        }));
         JavaPlugin plugin = EdenMinigames.instance();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, this::tick, 0, 1);
@@ -140,7 +156,7 @@ public class Tetris extends Minigame implements Listener {
         }
 
         player.sendActionBar(Component.text(score));
-        if (tick >= Math.max(5, 30 - Math.sqrt(totalTicks))) {
+        if (tick >= Math.max(5, 30 - Math.sqrt(totalTicks / 10))) {
             tick = 0;
             if (collides(falling, fallingPos.add(0, -1), rotation)) {
                 hitGround();
@@ -165,7 +181,7 @@ public class Tetris extends Minigame implements Listener {
             if (isLineCleared(i)) clearedLines.add(i);
         }
         switch (clearedLines.size()) {
-            case 1 -> score(40);
+            case 1 -> score += 40;
             case 2 -> score += 100;
             case 3 -> score += 300;
             case 4 -> score += 1200;
@@ -175,10 +191,6 @@ public class Tetris extends Minigame implements Listener {
             Integer line = clearedLines.get(i);
             clearLine(line);
         }
-    }
-
-    private void score(int i) {
-        score += i;
     }
 
     private void hitGround() {
@@ -201,7 +213,7 @@ public class Tetris extends Minigame implements Listener {
     }
 
     private void updateDisplay() {
-        display.update(field, falling, fallingPos, rotation);
+        display.update(field, falling, fallingPos, rotation, next);
     }
 
     private boolean collides(Tetromino tetromino, BlockVector2 pos, int rotation) {
@@ -246,10 +258,19 @@ public class Tetris extends Minigame implements Listener {
     }
 
     private void spawnRandomTetrimino() {
-        Tetromino[] v = Tetromino.values();
-        falling = v[rand.nextInt(v.length)];
+        if (bag == null || bag.isEmpty()) {
+            bag = new LinkedList<>(Arrays.asList(Tetromino.values()));
+            Collections.shuffle((List<?>) bag, rand);
+        }
+        if (next == null) {
+            next = bag.poll();
+            spawnRandomTetrimino();
+            return;
+        }
+        falling = next;
+        next = bag.poll();
         rotation = 0;
-        fallingPos = BlockVector2.at(5, 19 - falling.getRotation(0)[0].length);
+        fallingPos = BlockVector2.at(5, 20 - falling.getRotation(0)[0].length);
     }
 
     public void stop() {

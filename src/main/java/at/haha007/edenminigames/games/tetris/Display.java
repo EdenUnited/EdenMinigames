@@ -17,7 +17,7 @@ class Display {
         this.world = world;
     }
 
-    public void update(Tetromino[][] field, Tetromino falling, BlockVector2 fallingPos, int rotation) {
+    public void update(Tetromino[][] field, Tetromino falling, BlockVector2 fallingPos, int rotation, Tetromino next) {
         Tetromino[][] f = falling == null ? new Tetromino[0][0] : falling.getRotation(rotation);
         BlockVector2 offset = fallingPos.subtract(falling == null ? BlockVector2.ZERO : falling.centerOffset(rotation));
         try (EditSession es = WorldEdit.getInstance().newEditSession(world)) {
@@ -36,6 +36,19 @@ class Display {
                     } else {
                         es.setBlock(toWorldPos(x, y), BlockTypes.AIR);
                     }
+                }
+            }
+            Tetromino[][] n = next.getRotation(3);
+            offset = next.centerOffset(3);
+            for (int x = 3; x < 7; x++) {
+                for (int y = 21; y < 25; y++) {
+                    es.setBlock(toWorldPos(x, y), BlockTypes.AIR);
+                }
+            }
+            for (int x = 0; x < n.length; x++) {
+                for (int y = 0; y < n[x].length; y++) {
+                    if (n[x][y] == null) continue;
+                    es.setBlock(toWorldPos(x + 5, y + 22).subtract(offset.getX(), offset.getZ(), 0), next.block());
                 }
             }
         } catch (WorldEditException e) {

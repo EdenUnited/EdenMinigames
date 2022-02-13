@@ -29,11 +29,22 @@ public final class EdenMinigames extends JavaPlugin {
         instance = this;
         loadConfig();
 
-        command = new MinigameCommand(getConfig().getString("command"));
         loadGames();
+        command = new MinigameCommand(getConfig().getString("command"));
 
         saveConfig();
-        // Plugin startup logic
+    }
+
+    @Override
+    public void onDisable() {
+        //unregister minigames
+        for (Minigame registeredMinigame : registeredMinigames) {
+            registeredMinigame.unregister();
+        }
+        registeredMinigames.clear();
+
+        //unregister command
+        command.unregister();
     }
 
     private void loadGames() {
@@ -87,18 +98,6 @@ public final class EdenMinigames extends JavaPlugin {
                 setDefaults(config.getConfigurationSection(k), child);
             }
         });
-    }
-
-    @Override
-    public void onDisable() {
-        //unregister minigames
-        for (Minigame registeredMinigame : registeredMinigames) {
-            registeredMinigame.unregister();
-        }
-        registeredMinigames.clear();
-
-        //unregister command
-        command.unregister();
     }
 
     public static void reload() {

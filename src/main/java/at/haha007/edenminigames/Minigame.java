@@ -1,8 +1,11 @@
 package at.haha007.edenminigames;
 
+import at.haha007.edencommands.tree.node.LiteralCommandNode;
+import com.sk89q.worldedit.IncompleteRegionException;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.regions.CuboidRegion;
+import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.world.World;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -23,8 +26,32 @@ public abstract class Minigame {
     Location lobbySpawn;
     private List<? extends Player> playing;
     protected ConfigurationSection cfg;
+    protected final LiteralCommandNode command;
 
     protected Minigame(String configurationKey) {
+        command = LiteralCommandNode.literal(configurationKey);
+        command.then(LiteralCommandNode.literal("lobby").executes(c -> {
+            if (!(c.getSender() instanceof Player player)) {
+                c.getSender().sendMessage("This command can only be executed by players!");
+                return;
+            }
+
+            Region region;
+            try {
+                region = BukkitAdapter.adapt(player).getSelection();
+            } catch (IncompleteRegionException e) {
+                player.sendMessage("Make a WorldEdit selection!");
+                return;
+            }
+            CuboidRegion cuboid = CuboidRegion.makeCuboid(region);
+            cuboid.setWorld(BukkitAdapter.adapt(player.getWorld()));
+
+            setLobby(cuboid, player.getLocation());
+
+            EdenMinigames.instance().saveConfig();
+            player.sendMessage("Lobby updated.");
+        }));
+
         cfg = EdenMinigames.config().getConfigurationSection(configurationKey);
 
         if (cfg == null) {
@@ -104,5 +131,9 @@ public abstract class Minigame {
 
     public String name() {
         return cfg.getName();
+    }
+
+    public LiteralCommandNode command(){
+        return command;
     }
 }

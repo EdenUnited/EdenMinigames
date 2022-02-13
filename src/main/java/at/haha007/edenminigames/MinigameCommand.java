@@ -6,10 +6,6 @@ import at.haha007.edencommands.tree.node.ArgumentCommandNode;
 import at.haha007.edencommands.tree.node.CommandNode;
 import at.haha007.edencommands.tree.node.LiteralCommandNode;
 import at.haha007.edencommands.tree.node.argument.ArgumentParser;
-import com.sk89q.worldedit.IncompleteRegionException;
-import com.sk89q.worldedit.bukkit.BukkitAdapter;
-import com.sk89q.worldedit.regions.CuboidRegion;
-import com.sk89q.worldedit.regions.Region;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
@@ -26,9 +22,19 @@ public class MinigameCommand {
     public MinigameCommand(String name) {
         root = LiteralCommandNode.literal(name);
         root.then(startCommand());
-        root.then(setLobbyCommand());
         root.then(reloadCommand());
+        root.then(editCommand());
         CommandRegistry.register(root);
+    }
+
+    private CommandNode editCommand() {
+        LiteralCommandNode node = LiteralCommandNode.literal("edit");
+        for (Minigame minigame : EdenMinigames.registeredGames()) {
+            LiteralCommandNode child = minigame.command();
+            if (child == null) continue;
+            node.then(child);
+        }
+        return node;
     }
 
     private CommandNode reloadCommand() {
@@ -38,40 +44,6 @@ public class MinigameCommand {
             EdenMinigames.reload();
             c.getSender().sendMessage("EdenMinigames reload complete.");
         });
-        return node;
-    }
-
-    private CommandNode setLobbyCommand() {
-        LiteralCommandNode node = LiteralCommandNode.literal("lobby");
-        node.executes(c -> c.getSender().sendMessage(String.format("/%s lobby <game>", root.getLiteral())));
-
-        CommandNode arg = ArgumentCommandNode.argument("game", argumentParser);
-        node.then(arg);
-        arg.tabCompletes(tabCompleter);
-        arg.executes(c -> {
-            if (!(c.getSender() instanceof Player player)) {
-                c.getSender().sendMessage("This command can only be executed by players!");
-                return;
-            }
-
-            Region region;
-            try {
-                region = BukkitAdapter.adapt(player).getSelection();
-            } catch (IncompleteRegionException e) {
-                player.sendMessage("Make a WorldEdit selection!");
-                return;
-            }
-            CuboidRegion cuboid = CuboidRegion.makeCuboid(region);
-            cuboid.setWorld(BukkitAdapter.adapt(player.getWorld()));
-
-            Minigame game = c.getParameter("game", Minigame.class);
-
-            game.setLobby(cuboid, player.getLocation());
-
-            EdenMinigames.instance().saveConfig();
-            player.sendMessage("Lobby updated.");
-        });
-
         return node;
     }
 

@@ -1,0 +1,11 @@
+command: minigames
+tetris:
+  location: 0,0,0
+  lobby:
+    world: world
+    pos1: -10,320,-10
+    pos2: 10,-64,10
+    spawn: 0,0,0,0,0
+enabled:
+disabled:
+  - tetris

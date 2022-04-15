@@ -1,10 +1,12 @@
 package at.haha007.edenminigames;
 
+import at.haha007.edenminigames.games.bomberman.BomberMan;
 import at.haha007.edenminigames.games.tetris.Tetris;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.Reader;
@@ -16,13 +18,15 @@ import java.util.Map;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
 
-public final class EdenMinigames extends JavaPlugin {
+public final class EdenMinigames extends JavaPlugin implements Listener {
 
     private static EdenMinigames instance;
     private MinigameCommand command;
     private final List<Minigame> registeredMinigames = new ArrayList<>();
     private final Map<String, Class<? extends Minigame>> allGames = Map.of(
-            "tetris", Tetris.class);
+            "tetris", Tetris.class,
+            "bomberman", BomberMan.class
+    );
 
     @Override
     public void onEnable() {
@@ -33,6 +37,8 @@ public final class EdenMinigames extends JavaPlugin {
         command = new MinigameCommand(getConfig().getString("command"));
 
         saveConfig();
+
+        getServer().getPluginManager().registerEvents(this, this);
     }
 
     @Override

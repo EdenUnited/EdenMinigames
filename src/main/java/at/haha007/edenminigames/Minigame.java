@@ -108,6 +108,15 @@ public abstract class Minigame {
         playing = null;
     }
 
+    public void stop(Player player) {
+        player.teleport(lobbySpawn);
+        if (playing == null)
+            return;
+        playing.removeIf(p -> p == player);
+        if (playing.isEmpty())
+            stop();
+    }
+
     public boolean isPlaying(Player player) {
         return playing != null && playing.contains(player);
     }
@@ -133,7 +142,7 @@ public abstract class Minigame {
         return cfg.getName();
     }
 
-    public LiteralCommandNode command(){
+    public LiteralCommandNode command() {
         return command;
     }
 }

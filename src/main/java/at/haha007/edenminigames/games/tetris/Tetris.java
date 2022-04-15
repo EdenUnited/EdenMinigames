@@ -18,6 +18,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
@@ -62,6 +63,13 @@ public class Tetris extends Minigame implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, this::tick, 0, 1);
         display = new Display(Utils.blockVector3(cfg.getString("location")), BukkitAdapter.adapt(world()));
+    }
+
+    @EventHandler
+    void onPlayerQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        if (this.player != player) return;
+        stop();
     }
 
     @EventHandler

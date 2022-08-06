@@ -1,13 +1,12 @@
 package at.haha007.edenminigames.games.tetris;
 
-import at.haha007.edencommands.tree.node.LiteralCommandNode;
+import at.haha007.edencommands.eden.LiteralCommandNode;
 import at.haha007.edenminigames.EdenMinigames;
-import at.haha007.edenminigames.Minigame;
 import at.haha007.edenminigames.Utils;
+import at.haha007.edenminigames.games.Minigame;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.math.BlockVector2;
 import com.sk89q.worldedit.math.BlockVector3;
-import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -46,9 +45,9 @@ public class Tetris extends Minigame implements Listener {
 
     protected Tetris() {
         super("tetris");
-        command.then(LiteralCommandNode.literal("location").executes(c -> {
-            if (!(c.getSender() instanceof Player player)) {
-                c.getSender().sendMessage("This command can only be executed by players!");
+        command.then(new LiteralCommandNode("location").executor(c -> {
+            if (!(c.sender() instanceof Player player)) {
+                c.sender().sendMessage("This command can only be executed by players!");
                 return;
             }
             Location loc = player.getLocation();
@@ -163,7 +162,7 @@ public class Tetris extends Minigame implements Listener {
             return;
         }
 
-        player.sendActionBar(Component.text(score));
+        EdenMinigames.messageHandler().sendMessage("tetris_score", player, Integer.toString(score));
         if (tick >= Math.max(5, 30 - Math.sqrt(totalTicks / 10))) {
             tick = 0;
             if (collides(falling, fallingPos.add(0, -1), rotation)) {
@@ -283,7 +282,9 @@ public class Tetris extends Minigame implements Listener {
 
     public void stop() {
         field = new Tetromino[10][20];
-        player.sendMessage("Your score is %d.".formatted(score));
+        EdenMinigames.messageHandler().sendMessage("tetris_end", player, Integer.toString(score));
+        TetrisEndEvent event = new TetrisEndEvent(player, score);
+        Bukkit.getPluginManager().callEvent(event);
         player = null;
         falling = null;
         super.stop();
@@ -296,6 +297,8 @@ public class Tetris extends Minigame implements Listener {
         tick = 0;
         totalTicks = 0;
         updateDisplay();
-        return List.of(player = players.get(0));
+        player = players.get(0);
+        EdenMinigames.messageHandler().sendMessage("tetris_start", player);
+        return List.of(player);
     }
 }

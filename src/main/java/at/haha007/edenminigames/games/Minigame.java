@@ -1,6 +1,8 @@
-package at.haha007.edenminigames;
+package at.haha007.edenminigames.games;
 
-import at.haha007.edencommands.tree.node.LiteralCommandNode;
+import at.haha007.edencommands.eden.LiteralCommandNode;
+import at.haha007.edenminigames.EdenMinigames;
+import at.haha007.edenminigames.Utils;
 import com.sk89q.worldedit.IncompleteRegionException;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.math.BlockVector3;
@@ -29,10 +31,10 @@ public abstract class Minigame {
     protected final LiteralCommandNode command;
 
     protected Minigame(String configurationKey) {
-        command = LiteralCommandNode.literal(configurationKey);
-        command.then(LiteralCommandNode.literal("lobby").executes(c -> {
-            if (!(c.getSender() instanceof Player player)) {
-                c.getSender().sendMessage("This command can only be executed by players!");
+        command =new LiteralCommandNode(configurationKey);
+        command.then(new LiteralCommandNode("lobby").executor(c -> {
+            if (!(c.sender() instanceof Player player)) {
+                c.sender().sendMessage("This command can only be executed by players!");
                 return;
             }
 
@@ -93,7 +95,6 @@ public abstract class Minigame {
 
         List<? extends Player> players = playersInLobbyArea().stream().filter(Predicate.not(EdenMinigames::isBlocked)).toList();
         if (players.isEmpty()) return null;
-
 
         players = start(players);
 

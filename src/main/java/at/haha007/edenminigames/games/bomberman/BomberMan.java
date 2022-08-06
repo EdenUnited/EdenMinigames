@@ -1,9 +1,9 @@
 package at.haha007.edenminigames.games.bomberman;
 
-import at.haha007.edencommands.tree.node.LiteralCommandNode;
+import at.haha007.edencommands.eden.LiteralCommandNode;
 import at.haha007.edenminigames.EdenMinigames;
-import at.haha007.edenminigames.Minigame;
 import at.haha007.edenminigames.Utils;
+import at.haha007.edenminigames.games.Minigame;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.IncompleteRegionException;
 import com.sk89q.worldedit.WorldEdit;
@@ -11,6 +11,7 @@ import com.sk89q.worldedit.WorldEditException;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.regions.CuboidRegion;
+import com.sk89q.worldedit.world.block.BaseBlock;
 import com.sk89q.worldedit.world.block.BlockTypes;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -40,6 +41,8 @@ public class BomberMan extends Minigame implements Listener {
     private final List<Location> spawns;
     private Map<Player, PlayerData> playerData = new HashMap<>();
     private final Random rand = new Random();
+    private final BaseBlock fire = BukkitAdapter.adapt(Material.FIRE.createBlockData()).toBaseBlock();
+    private final BaseBlock hay_block = BukkitAdapter.adapt(Material.HAY_BLOCK.createBlockData()).toBaseBlock();
 
     protected BomberMan() {
         super("bomberman");
@@ -80,46 +83,52 @@ public class BomberMan extends Minigame implements Listener {
     }
 
     private void registerCommand() {
-        command.then(LiteralCommandNode.literal("wallarea").executes(c -> {
-            if (!(c.getSender() instanceof Player player)) {
-                c.getSender().sendMessage("This command can only be executed by players.");
+        command.then(new LiteralCommandNode("wallarea").executor(c -> {
+            if (!(c.sender() instanceof Player player)) {
+                c.sender().sendMessage("This command can only be executed by players.");
                 return;
             }
             CuboidRegion region;
             try {
                 region = CuboidRegion.makeCuboid(BukkitAdapter.adapt(player).getSelection());
             } catch (IncompleteRegionException e) {
-                player.sendMessage("incomplete region!");
+                player.sendMessage("Incomplete region!");
                 return;
             }
             area("wallArea", region);
+            player.sendMessage("Area updated!");
             EdenMinigames.instance().saveConfig();
             wallArea = region;
         }));
 
-        command.then(LiteralCommandNode.literal("bounds").executes(c -> {
-            if (!(c.getSender() instanceof Player player)) {
-                c.getSender().sendMessage("This command can only be executed by players.");
+        command.then(new LiteralCommandNode("bounds").executor(c -> {
+            if (!(c.sender() instanceof Player player)) {
+                c.sender().sendMessage("This command can only be executed by players.");
                 return;
             }
             CuboidRegion region;
             try {
                 region = CuboidRegion.makeCuboid(BukkitAdapter.adapt(player).getSelection());
             } catch (IncompleteRegionException e) {
-                player.sendMessage("incomplete region!");
+                player.sendMessage("Incomplete region!");
                 return;
             }
             area("bounds", region);
+            player.sendMessage("Bounds updated!");
             EdenMinigames.instance().saveConfig();
             bounds = region;
         }));
     }
 
     public void stop(Player player) {
-        player.sendMessage("You've died in place %s".formatted(playerData.size()));
+        EdenMinigames.messageHandler().sendMessage("bomberman_end", player, "" + playerData.size());
         playerData.remove(player);
-        if (playerData.size() < 2)
+        if (playerData.size() < 2) {
+            for (Player winner : playerData.keySet()) {
+                EdenMinigames.messageHandler().sendMessage("bomberman_win", winner);
+            }
             stop();
+        }
         super.stop(player);
     }
 
@@ -127,7 +136,7 @@ public class BomberMan extends Minigame implements Listener {
         playerData.clear();
         EditSession es = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(world()));
         es.replaceBlocks(wallArea,
-                Set.of(BlockTypes.FIRE.getDefaultState().toBaseBlock(), BlockTypes.HAY_BLOCK.getDefaultState().toBaseBlock()),
+                Set.of(fire, hay_block),
                 BlockTypes.AIR);
         es.close();
         super.stop();

@@ -1,0 +1,34 @@
+#------FORMAT------
+#key:
+#  chat: "message in chat"
+#  actionbar: "Actionbar!"
+#  title:
+#    title: "Title!"
+#    subtitle: "Subtitle!"
+#    in: 10
+#    stay: 70
+#    out: 20
+#  sound:
+#    key: "block.anvil.land"
+#    source: "master"
+#    volume: 1
+#    pitch: 1
+
+#------DEFINITIONS------
+#tetris_end(score)
+#tetris_start()
+#tetris_score(score)
+#bomberman_end(place)
+#bomberman_win()
+
+
+tetris_end:
+  chat: "<green>Game Over! Your score is <gold>{0}<green>!"
+tetris_start:
+  chat: "<green>Game is starting!"
+tetris_score:
+  actionbar: "<green>{0}"
+bomberman_end:
+  chat: "<green>Game Over! You are in place <gold>{0}<green>!"
+bomberman_win:
+  chat: "<green>You've won!<green>!"

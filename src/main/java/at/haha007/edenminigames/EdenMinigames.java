@@ -1,7 +1,9 @@
 package at.haha007.edenminigames;
 
+import at.haha007.edenminigames.games.Minigame;
 import at.haha007.edenminigames.games.bomberman.BomberMan;
 import at.haha007.edenminigames.games.tetris.Tetris;
+import at.haha007.edenminigames.message.MessageHandler;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -27,12 +29,12 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
             "tetris", Tetris.class,
             "bomberman", BomberMan.class
     );
+    private MessageHandler messageHandler ;
 
     @Override
     public void onEnable() {
         instance = this;
         loadConfig();
-
         loadGames();
         command = new MinigameCommand(getConfig().getString("command"));
 
@@ -82,6 +84,7 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
     }
 
     private void loadConfig() {
+        messageHandler = new MessageHandler(this);
         saveDefaultConfig();
         reloadConfig();
 
@@ -134,5 +137,9 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
 
     public static EdenMinigames instance() {
         return instance;
+    }
+
+    public static MessageHandler messageHandler(){
+        return instance().messageHandler;
     }
 }

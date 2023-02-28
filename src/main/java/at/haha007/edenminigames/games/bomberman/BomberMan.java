@@ -3,7 +3,7 @@ package at.haha007.edenminigames.games.bomberman;
 import at.haha007.edencommands.eden.LiteralCommandNode;
 import at.haha007.edenminigames.EdenMinigames;
 import at.haha007.edenminigames.Utils;
-import at.haha007.edenminigames.games.Minigame;
+import at.haha007.edenminigames.games.BiStateMinigame;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.IncompleteRegionException;
 import com.sk89q.worldedit.WorldEdit;
@@ -33,7 +33,7 @@ import org.bukkit.inventory.PlayerInventory;
 
 import java.util.*;
 
-public class BomberMan extends Minigame implements Listener {
+public class BomberMan extends BiStateMinigame implements Listener {
     private final int taskId;
     private CuboidRegion wallArea;
     private CuboidRegion bounds;

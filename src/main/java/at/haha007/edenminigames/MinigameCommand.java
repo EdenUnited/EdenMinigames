@@ -14,19 +14,22 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class MinigameCommand {
-    private final Argument<Minigame> argumentParser;
+    private final Argument<Minigame> minigameArgument;
     private final CommandRegistry registry = new CommandRegistry(EdenMinigames.instance());
 
     public MinigameCommand(String name) {
-        argumentParser = new Argument<>() {
+        minigameArgument = new Argument<>() {
             public @NotNull ParsedArgument<Minigame> parse(CommandContext context) throws CommandException {
-                Minigame game = EdenMinigames.getGame(context.input()[context.pointer()].toLowerCase());
+                Class<? extends Minigame> gameClass = EdenMinigames.getGameClass(context.input()[context.pointer()].toLowerCase());
+                if (gameClass == null)
+                    throw new CommandException(Component.text("This game doesn't exist!", NamedTextColor.RED), context);
+                Minigame game = EdenMinigames.getGame(gameClass);
                 if (game == null)
                     throw new CommandException(Component.text("This game doesn't exist!", NamedTextColor.RED), context);
                 return new ParsedArgument<>(game, 1);
             }
         };
-        argumentParser.tabCompleter(c -> EdenMinigames.registeredGames().stream().map(Minigame::name).collect(Collectors.toList()));
+        minigameArgument.tabCompleter(c -> EdenMinigames.registeredGames().stream().map(Minigame::name).collect(Collectors.toList()));
         LiteralCommandNode root = new LiteralCommandNode(name);
         root.then(startCommand().requires(CommandRegistry.permission("minigames.command.start")));
         root.then(reloadCommand().requires(CommandRegistry.permission("minigames.command.reload")));
@@ -59,7 +62,7 @@ public class MinigameCommand {
         LiteralCommandNode node = new LiteralCommandNode("start");
         node.executor(c -> c.sender().sendMessage("This game is not loaded or does not exist!"));
 
-        ArgumentCommandNode<Minigame> arg = new ArgumentCommandNode<>("game", argumentParser);
+        ArgumentCommandNode<Minigame> arg = new ArgumentCommandNode<>("game", minigameArgument);
         arg.executor(c -> {
             Minigame game = c.parameter("game");
             Bukkit.getScheduler().runTask(EdenMinigames.instance(), () -> {

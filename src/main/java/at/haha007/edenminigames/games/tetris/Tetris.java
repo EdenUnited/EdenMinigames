@@ -3,10 +3,14 @@ package at.haha007.edenminigames.games.tetris;
 import at.haha007.edencommands.eden.LiteralCommandNode;
 import at.haha007.edenminigames.EdenMinigames;
 import at.haha007.edenminigames.Utils;
-import at.haha007.edenminigames.games.Minigame;
+import at.haha007.edenminigames.games.BiStateMinigame;
+import at.haha007.edenminigames.placeholder.MinigamePlaceholders;
+import at.haha007.edenminigames.placeholder.PlaceholderInitializer;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.math.BlockVector2;
 import com.sk89q.worldedit.math.BlockVector3;
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -22,7 +26,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
 
-public class Tetris extends Minigame implements Listener {
+@Accessors(fluent = true)
+public class Tetris extends BiStateMinigame implements Listener, PlaceholderInitializer {
     //scroll up   -> move left
     //scroll down -> move right
     //left click  -> rotate left
@@ -42,26 +47,32 @@ public class Tetris extends Minigame implements Listener {
     private int totalTicks = 1;
     private Queue<Tetromino> bag;
     private Tetromino next;
+    @Getter
+    private final ScoreTracker scoreTracker = new ScoreTracker();
 
     protected Tetris() {
         super("tetris");
         command.then(new LiteralCommandNode("location").executor(c -> {
-            if (!(c.sender() instanceof Player player)) {
+            if (!(c.sender() instanceof Player sender)) {
                 c.sender().sendMessage("This command can only be executed by players!");
                 return;
             }
-            Location loc = player.getLocation();
+            Location loc = sender.getLocation();
 
             cfg.set("location", "%d,%d,%d".formatted(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ()));
             display = new Display(BlockVector3.at(loc.getX(), loc.getY(), loc.getZ()), BukkitAdapter.adapt(loc.getWorld()));
 
             EdenMinigames.instance().saveConfig();
-            player.sendMessage("Location updated.");
+            sender.sendMessage("Location updated.");
         }));
         JavaPlugin plugin = EdenMinigames.instance();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, this::tick, 0, 1);
         display = new Display(Utils.blockVector3(cfg.getString("location")), BukkitAdapter.adapt(world()));
+    }
+
+    public void register(MinigamePlaceholders placeholders) {
+        scoreTracker.register(placeholders);
     }
 
     @EventHandler
@@ -262,6 +273,7 @@ public class Tetris extends Minigame implements Listener {
     public void unregister() {
         HandlerList.unregisterAll(this);
         Bukkit.getScheduler().cancelTask(taskId);
+        scoreTracker.unregister();
     }
 
     private void spawnRandomTetrimino() {
@@ -282,9 +294,10 @@ public class Tetris extends Minigame implements Listener {
 
     public void stop() {
         field = new Tetromino[10][20];
-        EdenMinigames.messageHandler().sendMessage("tetris_end", player, Integer.toString(score));
         TetrisEndEvent event = new TetrisEndEvent(player, score);
         Bukkit.getPluginManager().callEvent(event);
+        if (!event.isCancelled())
+            EdenMinigames.messageHandler().sendMessage("tetris_end", player, Integer.toString(event.score()));
         player = null;
         falling = null;
         super.stop();

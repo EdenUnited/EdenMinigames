@@ -4,6 +4,7 @@ import at.haha007.edenminigames.games.Minigame;
 import at.haha007.edenminigames.games.bomberman.BomberMan;
 import at.haha007.edenminigames.games.tetris.Tetris;
 import at.haha007.edenminigames.message.MessageHandler;
+import at.haha007.edenminigames.placeholder.PlaceholderManager;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -14,6 +15,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.io.Reader;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -29,13 +31,28 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
             "tetris", Tetris.class,
             "bomberman", BomberMan.class
     );
-    private MessageHandler messageHandler ;
+    private MessageHandler messageHandler;
+    private SqliteDatabase database;
+    private PlaceholderManager placeholderManager;
 
     @Override
     public void onEnable() {
         instance = this;
+
         loadConfig();
+        database = new SqliteDatabase(this, "data.db");
+        try {
+            database.connect();
+        } catch (SQLException e) {
+            getPluginLoader().disablePlugin(this);
+            throw new RuntimeException(e);
+        }
+
         loadGames();
+
+        placeholderManager = new PlaceholderManager();
+        placeholderManager.register();
+
         command = new MinigameCommand(getConfig().getString("command"));
 
         saveConfig();
@@ -49,7 +66,16 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
         for (Minigame registeredMinigame : registeredMinigames) {
             registeredMinigame.unregister();
         }
+        if (placeholderManager != null) {
+            placeholderManager.unregister();
+            placeholderManager = null;
+        }
         registeredMinigames.clear();
+        try {
+            database.disconnect();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
 
         //unregister command
         command.unregister();
@@ -73,7 +99,8 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
                 constructor.setAccessible(true);
                 Minigame game = constructor.newInstance();
                 registeredMinigames.add(game);
-            } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
+            } catch (InstantiationException | IllegalAccessException | NoSuchMethodException |
+                     InvocationTargetException e) {
                 logger().severe(String.format("Invalid constructor for game: %s", key));
                 e.printStackTrace();
             }
@@ -118,9 +145,12 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
         return instance.registeredMinigames;
     }
 
-    public static Minigame getGame(String key) {
-        Class<? extends Minigame> clazz = instance.allGames.get(key);
-        return instance.registeredMinigames.stream().filter(g -> g.getClass() == clazz).findAny().orElse(null);
+    public static <T extends Minigame> T getGame(Class<T> clazz) {
+        return instance.registeredMinigames.stream().filter(g -> g.getClass() == clazz).findAny().map(clazz::cast).orElse(null);
+    }
+
+    public static Class<? extends Minigame> getGameClass(String key) {
+        return instance().allGames.get(key);
     }
 
     public static boolean isBlocked(Player player) {
@@ -139,7 +169,11 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
         return instance;
     }
 
-    public static MessageHandler messageHandler(){
+    public static MessageHandler messageHandler() {
         return instance().messageHandler;
+    }
+
+    public static SqliteDatabase database() {
+        return instance().database;
     }
 }

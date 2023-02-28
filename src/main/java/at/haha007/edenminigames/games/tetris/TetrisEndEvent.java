@@ -18,13 +18,15 @@ public class TetrisEndEvent extends MinigameEvent implements Cancellable {
     @Getter
     @Setter
     private int score;
+
+    //canceling suppresses the entry in the database and the tetris_end message.
     @Setter
     @Getter
     private boolean cancelled;
 
 
     protected TetrisEndEvent(Player player, int score) {
-        super(EdenMinigames.getGame("tetris"));
+        super(EdenMinigames.getGame(Tetris.class));
         this.player = player;
         this.score = score;
     }

@@ -19,14 +19,12 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Predicate;
 
 public abstract class Minigame {
     @NotNull
     private CuboidRegion lobby;
     @NotNull
     Location lobbySpawn;
-    private List<? extends Player> playing;
     protected ConfigurationSection cfg;
     protected final LiteralCommandNode command;
 
@@ -90,37 +88,13 @@ public abstract class Minigame {
     }
 
     @Nullable
-    public List<? extends Player> start() {
-        if (playing != null) return null;
+    public abstract List<? extends Player> start();
 
-        List<? extends Player> players = playersInLobbyArea().stream().filter(Predicate.not(EdenMinigames::isBlocked)).toList();
-        if (players.isEmpty()) return null;
+    public abstract void stop();
 
-        players = start(players);
+    public abstract void stop(Player player) ;
 
-        this.playing = players;
-        return players;
-    }
-
-    public void stop() {
-        for (Player player : playing) {
-            player.teleport(lobbySpawn);
-        }
-        playing = null;
-    }
-
-    public void stop(Player player) {
-        player.teleport(lobbySpawn);
-        if (playing == null)
-            return;
-        playing.removeIf(p -> p == player);
-        if (playing.isEmpty())
-            stop();
-    }
-
-    public boolean isPlaying(Player player) {
-        return playing != null && playing.contains(player);
-    }
+    public abstract boolean isPlaying(Player player) ;
 
     public abstract void unregister();
 

@@ -1,4 +1,4 @@
-package at.haha007.edenminigames;
+package at.haha007.edenminigames.utils;
 
 import com.sk89q.worldedit.math.BlockVector3;
 

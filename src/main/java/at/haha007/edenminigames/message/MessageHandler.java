@@ -1,16 +1,21 @@
 package at.haha007.edenminigames.message;
 
+import at.haha007.edenminigames.EdenMinigames;
 import lombok.SneakyThrows;
+import net.kyori.adventure.audience.Audience;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 public class MessageHandler {
     private final Map<String, Message> messages = new HashMap<>();
@@ -37,15 +42,62 @@ public class MessageHandler {
         if (changed) cfg.save(file);
 
         //load messages
-        for (String key : cfg.getKeys(false)) {
-            messages.put(key, Message.parse(Objects.requireNonNull(cfg.getConfigurationSection(key))));
+        for (String sectionKey : cfg.getKeys(false)) {
+            ConfigurationSection section = cfg.getConfigurationSection(sectionKey);
+            if (section == null)
+                throw new RuntimeException("Invalid message section: " + sectionKey);
+            for (String key : section.getKeys(false)) {
+                messages.put(sectionKey + "." + key, Message.parse(Objects.requireNonNull(section.getConfigurationSection(key))));
+            }
         }
     }
 
+    public void save() {
+        JavaPlugin plugin = EdenMinigames.instance();
+        File file = new File(plugin.getDataFolder(), "messages.yml");
+        YamlConfiguration cfg = YamlConfiguration.loadConfiguration(file);
+        Map<String, Message> messagesInYml = new HashMap<>();
+        for (String sectionKey : cfg.getKeys(false)) {
+            ConfigurationSection section = cfg.getConfigurationSection(sectionKey);
+            if (section == null)
+                throw new RuntimeException("Invalid message section: " + sectionKey);
+            for (String key : section.getKeys(false)) {
+                messagesInYml.put(sectionKey + "." + key, Message.parse(Objects.requireNonNull(section.getConfigurationSection(key))));
+            }
+        }
+        messages.entrySet().stream().filter(e -> ! e.getValue().equals(messagesInYml.get(e.getKey()))).forEach(e -> {
+            ConfigurationSection section = cfg.createSection(e.getKey());
+            e.getValue().save(section);
+        });
+        try {
+            cfg.save(file);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Message message(String key) {
+        return messages.get(key);
+    }
+
     public void sendMessage(String key, Player player, String... args) {
-        if (player == null)
+        sendMessage(key, player, player, args);
+    }
+
+    public void sendMessage(String key, Audience audience, Player papiParsed, String... args) {
+        if (audience == null)
             return;
         Message msg = messages.get(key);
-        msg.sendMessage(player, args);
+        if (msg == null) {
+            msg = new Message();
+            msg.chat("<red>Missing message with %d parameters: %s".formatted(args.length, key));
+            messages.put(key, msg);
+            save();
+        }
+        msg.sendMessage(audience, papiParsed, args);
+    }
+
+    public Set<String> keys() {
+        return messages.keySet();
     }
 }

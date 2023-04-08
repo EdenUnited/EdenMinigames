@@ -1,35 +1,42 @@
 package at.haha007.edenminigames;
 
-import at.haha007.edenminigames.games.Minigame;
-import at.haha007.edenminigames.games.bomberman.BomberMan;
-import at.haha007.edenminigames.games.tetris.Tetris;
+import at.haha007.edenminigames.games.Game;
+import at.haha007.edenminigames.games.jnr.JumpAndRunGame;
+import at.haha007.edenminigames.games.mensch.MenschGame;
+import at.haha007.edenminigames.games.tetris.TetrisGame;
 import at.haha007.edenminigames.message.MessageHandler;
 import at.haha007.edenminigames.placeholder.PlaceholderManager;
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.Reader;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Predicate;
 import java.util.logging.Logger;
 
+@Accessors(fluent = true)
 public final class EdenMinigames extends JavaPlugin implements Listener {
 
     private static EdenMinigames instance;
     private MinigameCommand command;
-    private final List<Minigame> registeredMinigames = new ArrayList<>();
-    private final Map<String, Class<? extends Minigame>> allGames = Map.of(
-            "tetris", Tetris.class,
-            "bomberman", BomberMan.class
+    @Getter
+    private final List<Game> registeredGames = new ArrayList<>();
+    @Getter
+    private final Map<String, Class<? extends Game>> allGames = Map.of(
+            "mensch", MenschGame.class,
+            "tetris", TetrisGame.class,
+            "jnr", JumpAndRunGame.class
     );
     private MessageHandler messageHandler;
     private SqliteDatabase database;
@@ -44,33 +51,48 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
         try {
             database.connect();
         } catch (SQLException e) {
-            getPluginLoader().disablePlugin(this);
             throw new RuntimeException(e);
         }
 
-        loadGames();
+        //register minigames
+        List<String> enabledGames = getConfig().getStringList("enabled");
+        List<String> disabledGames = allGames.keySet().stream().filter(k -> !enabledGames.contains(k)).toList();
+        getConfig().set("disabled", disabledGames);
+        for (Iterator<String> iterator = enabledGames.iterator(); iterator.hasNext(); ) {
+            String enabledGame = iterator.next();
+            Class<? extends Game> game = allGames.get(enabledGame);
+            if (game == null) {
+                iterator.remove();
+                continue;
+            }
+            try {
+                registeredGames.add(game.getDeclaredConstructor().newInstance());
+                getLogger().info("Registered minigame: " + enabledGame);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
 
         placeholderManager = new PlaceholderManager();
         placeholderManager.register();
 
-        command = new MinigameCommand(getConfig().getString("command"));
+        command = new MinigameCommand(getConfig().getString("command", "games"));
 
         saveConfig();
-
         getServer().getPluginManager().registerEvents(this, this);
     }
 
     @Override
     public void onDisable() {
         //unregister minigames
-        for (Minigame registeredMinigame : registeredMinigames) {
-            registeredMinigame.unregister();
+        for (Game registeredMinigame : registeredGames) {
+            registeredMinigame.activePlayers().forEach(registeredMinigame::stop);
         }
         if (placeholderManager != null) {
             placeholderManager.unregister();
             placeholderManager = null;
         }
-        registeredMinigames.clear();
+        registeredGames.clear();
         try {
             database.disconnect();
         } catch (SQLException e) {
@@ -79,42 +101,18 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
 
         //unregister command
         command.unregister();
-    }
-
-    private void loadGames() {
-        FileConfiguration cfg = getConfig();
-        List<String> enabled = cfg.getStringList("enabled");
-        List<String> disabled = cfg.getStringList("disabled");
-
-        enabled.removeIf(Predicate.not(allGames::containsKey));
-        disabled.removeIf(Predicate.not(allGames::containsKey));
-        disabled.removeIf(enabled::contains);
-
-        enabled.sort(String::compareTo);
-        disabled.sort(String::compareTo);
-
-        enabled.forEach(key -> {
-            try {
-                Constructor<? extends Minigame> constructor = allGames.get(key).getDeclaredConstructor();
-                constructor.setAccessible(true);
-                Minigame game = constructor.newInstance();
-                registeredMinigames.add(game);
-            } catch (InstantiationException | IllegalAccessException | NoSuchMethodException |
-                     InvocationTargetException e) {
-                logger().severe(String.format("Invalid constructor for game: %s", key));
-                e.printStackTrace();
-            }
-        });
-
-        cfg.set("enabled", enabled);
-        cfg.set("disabled", disabled);
+        HandlerList.unregisterAll((Plugin) this);
     }
 
     private void loadConfig() {
         messageHandler = new MessageHandler(this);
         saveDefaultConfig();
         reloadConfig();
+    }
 
+    @Override
+    public void reloadConfig() {
+        super.reloadConfig();
         Reader defaults = getTextResource("defaults.yml");
         if (defaults == null) {
             logger().severe("The default configuration sections were not found!");
@@ -131,30 +129,28 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
                 config.set(k, defaults.get(k));
             }
             if (defaults.get(k) instanceof ConfigurationSection child) {
-                setDefaults(config.getConfigurationSection(k), child);
+                ConfigurationSection section = config.getConfigurationSection(k);
+                if (section == null) section = config.createSection(k);
+                setDefaults(section, child);
             }
         });
     }
 
-    public static void reload() {
-        instance.onDisable();
-        instance.onEnable();
+    public void reload() {
+        onDisable();
+        onEnable();
     }
 
-    public static List<Minigame> registeredGames() {
-        return instance.registeredMinigames;
+    public static <T extends Game> T getGame(Class<T> clazz) {
+        return instance.registeredGames.stream().filter(g -> g.getClass() == clazz).findAny().map(clazz::cast).orElse(null);
     }
 
-    public static <T extends Minigame> T getGame(Class<T> clazz) {
-        return instance.registeredMinigames.stream().filter(g -> g.getClass() == clazz).findAny().map(clazz::cast).orElse(null);
-    }
-
-    public static Class<? extends Minigame> getGameClass(String key) {
+    public static Class<? extends Game> getGameClass(String key) {
         return instance().allGames.get(key);
     }
 
     public static boolean isBlocked(Player player) {
-        return instance.registeredMinigames.stream().anyMatch(game -> game.isPlaying(player));
+        return instance.registeredGames.stream().anyMatch(game -> game.activePlayers().contains(player));
     }
 
     public static Logger logger() {
@@ -169,7 +165,7 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
         return instance;
     }
 
-    public static MessageHandler messageHandler() {
+    public static MessageHandler messenger() {
         return instance().messageHandler;
     }
 

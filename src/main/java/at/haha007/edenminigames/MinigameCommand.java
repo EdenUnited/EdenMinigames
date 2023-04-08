@@ -1,81 +1,107 @@
 package at.haha007.edenminigames;
 
-import at.haha007.edencommands.eden.*;
-import at.haha007.edencommands.eden.argument.Argument;
-import at.haha007.edencommands.eden.argument.ParsedArgument;
-import at.haha007.edenminigames.games.Minigame;
+import at.haha007.edencommands.CommandContext;
+import at.haha007.edencommands.CommandRegistry;
+import at.haha007.edencommands.annotations.AnnotatedCommandLoader;
+import at.haha007.edencommands.annotations.Command;
+import at.haha007.edencommands.annotations.SyncCommand;
+import at.haha007.edencommands.tree.LiteralCommandNode;
+import at.haha007.edencommands.tree.LiteralCommandNode.LiteralCommandBuilder;
+import at.haha007.edenminigames.games.Game;
+import at.haha007.edenminigames.games.utils.Path;
+import at.haha007.edenminigames.games.utils.PathVisualizer;
+import at.haha007.edenminigames.message.MessageCommand;
+import at.haha007.edenminigames.utils.PathEditor;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.jetbrains.annotations.NotNull;
+import org.bukkit.util.Vector;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 public class MinigameCommand {
-    private final Argument<Minigame> minigameArgument;
-    private final CommandRegistry registry = new CommandRegistry(EdenMinigames.instance());
+    private final CommandRegistry registry;
 
     public MinigameCommand(String name) {
-        minigameArgument = new Argument<>() {
-            public @NotNull ParsedArgument<Minigame> parse(CommandContext context) throws CommandException {
-                Class<? extends Minigame> gameClass = EdenMinigames.getGameClass(context.input()[context.pointer()].toLowerCase());
-                if (gameClass == null)
-                    throw new CommandException(Component.text("This game doesn't exist!", NamedTextColor.RED), context);
-                Minigame game = EdenMinigames.getGame(gameClass);
-                if (game == null)
-                    throw new CommandException(Component.text("This game doesn't exist!", NamedTextColor.RED), context);
-                return new ParsedArgument<>(game, 1);
-            }
-        };
-        minigameArgument.tabCompleter(c -> EdenMinigames.registeredGames().stream().map(Minigame::name).collect(Collectors.toList()));
-        LiteralCommandNode root = new LiteralCommandNode(name);
-        root.then(startCommand().requires(CommandRegistry.permission("minigames.command.start")));
-        root.then(reloadCommand().requires(CommandRegistry.permission("minigames.command.reload")));
-        root.then(editCommand().requires(CommandRegistry.permission("minigames.command.edit")));
-        root.requires(CommandRegistry.permission("minigames.command"));
-        registry.register(root);
+        registry = new CommandRegistry(EdenMinigames.instance());
+        LiteralCommandBuilder cmd = LiteralCommandNode.builder(name.toLowerCase());
+        cmd.requires(CommandRegistry.permission("minigames.command"));
+        AnnotatedCommandLoader loader = new AnnotatedCommandLoader(EdenMinigames.instance());
+        loader.addAnnotated(this);
+        loader.getCommands().forEach(cmd::then);
+        registerGameCommands(cmd);
+        new MessageCommand(cmd, name);
+        LiteralCommandBuilder pathCmd = LiteralCommandNode.builder("path");
+        new PathEditor(pathCmd);
+        cmd.then(pathCmd);
+        registry.register(cmd.build());
     }
 
-    private LiteralCommandNode editCommand() {
-        LiteralCommandNode node = new LiteralCommandNode("edit");
-        for (Minigame minigame : EdenMinigames.registeredGames()) {
-            LiteralCommandNode child = minigame.command();
-            if (child == null) continue;
-            node.then(child);
+    private void registerGameCommands(LiteralCommandBuilder cmd) {
+        EdenMinigames plugin = EdenMinigames.instance();
+        List<Game> registeredGames = plugin.registeredGames();
+        for (Game game : registeredGames) {
+            var gameCommand = createGameCommand(game);
+            cmd.then(gameCommand);
         }
-        return node;
     }
 
-    private LiteralCommandNode reloadCommand() {
-        LiteralCommandNode node = new LiteralCommandNode("reload");
-        node.executor(c -> Bukkit.getScheduler().runTask(EdenMinigames.instance(), () -> {
-            c.sender().sendMessage("Reloading EdenMinigames...");
-            EdenMinigames.reload();
-            c.sender().sendMessage("EdenMinigames reload complete.");
-        }));
-        return node;
+    private LiteralCommandBuilder createGameCommand(Game game) {
+        String name = EdenMinigames.instance().allGames().entrySet()
+                .stream().filter(e -> e.getValue().isInstance(game))
+                .findAny().map(Map.Entry::getKey).orElse(null);
+        if (name == null) throw new IllegalStateException(game.getClass().getSimpleName());
+        LiteralCommandBuilder gameCommand = LiteralCommandNode.builder(name);
+        gameCommand.requires(CommandRegistry.permission("minigames.command." + name));
+        game.initCommand(gameCommand);
+        return gameCommand;
     }
 
-    private LiteralCommandNode startCommand() {
-        LiteralCommandNode node = new LiteralCommandNode("start");
-        node.executor(c -> c.sender().sendMessage("This game is not loaded or does not exist!"));
+    @Command("path test")
+    private void pathTestCommand(CommandContext context) {
+        if (!(context.sender() instanceof Player player)) {
+            context.sender().sendMessage(Component.text("Only players can use this command."));
+            return;
+        }
+        World world = player.getWorld();
+        Vector vector = player.getLocation().toVector();
+        List<Vector> spiral = new ArrayList<>();
+        for (int i = 0; i < 1000; i++) {
+            double x = Math.cos(i * 0.1) * i * 0.1;
+            double z = Math.sin(i * 0.1) * i * 0.1;
+            Vector v = new Vector(x, i / 10d, z).add(vector);
+            spiral.add(v);
+        }
 
-        ArgumentCommandNode<Minigame> arg = new ArgumentCommandNode<>("game", minigameArgument);
-        arg.executor(c -> {
-            Minigame game = c.parameter("game");
-            Bukkit.getScheduler().runTask(EdenMinigames.instance(), () -> {
-                List<? extends Player> started = game.start();
-                if (started == null) {
-                    c.sender().sendMessage("Couldn't start game.");
-                    return;
-                }
-                c.sender().sendMessage(String.format("Game started for %d players.", started.size()));
-            });
-        });
-        return node.then(arg);
+        List<Vector> displayed = new ArrayList<>();
+        displayed.add(vector);
+        Path path = new Path(world, displayed);
+        PathVisualizer visualizer = new PathVisualizer(path);
+        int taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(EdenMinigames.instance(), () -> {
+            if (spiral.isEmpty()) return;
+            Vector v = spiral.remove(0);
+            path.addNode(v);
+        }, 1, 1);
+        Bukkit.getScheduler().scheduleSyncDelayedTask(EdenMinigames.instance(), () -> {
+            Bukkit.getScheduler().cancelTask(taskId);
+            visualizer.hide(player);
+        }, 1050);
+
+        visualizer.show(player);
     }
+
+
+    @Command("reload")
+    @SyncCommand
+    private void reloadCommand(CommandContext context) {
+        EdenMinigames plugin = EdenMinigames.instance();
+        plugin.reload();
+        context.sender().sendMessage(Component.text("Reloaded!"));
+    }
+
 
     public void unregister() {
         registry.destroy();

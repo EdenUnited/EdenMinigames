@@ -1,6 +1,6 @@
 package at.haha007.edenminigames.placeholder;
 
-import at.haha007.edenminigames.games.Minigame;
+import at.haha007.edenminigames.games.Game;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;
@@ -9,13 +9,13 @@ import lombok.experimental.Accessors;
 public
 class MinigamePlaceholders {
     @Getter
-    private final Minigame minigame;
+    private final Game minigame;
     @Getter(AccessLevel.PACKAGE)
     private final LiteralPlaceholderNode rootNode;
 
-    MinigamePlaceholders(Minigame minigame) {
+    MinigamePlaceholders(Game minigame) {
         this.minigame = minigame;
-        rootNode = new LiteralPlaceholderNode(minigame.name());
+        rootNode = new LiteralPlaceholderNode(minigame.getClass().getSimpleName());
     }
 
 

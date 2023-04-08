@@ -1,8 +1,7 @@
 package at.haha007.edenminigames.message;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
 import me.clip.placeholderapi.PlaceholderAPI;
+import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -16,7 +15,6 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class Message {
     private static final MiniMessage mm = MiniMessage.miniMessage();
 
@@ -54,30 +52,92 @@ public class Message {
         return message;
     }
 
-    public void sendMessage(Player player, String... args) {
-        Optional.ofNullable(chat)
-                .map(s -> PlaceholderAPI.setPlaceholders(player, s))
-                .map(s -> setPlaceholders(s, args))
-                .map(mm::deserialize)
-                .ifPresent(player::sendMessage);
-        Optional.ofNullable(actionbar)
-                .map(s -> PlaceholderAPI.setPlaceholders(player, s))
-                .map(s -> setPlaceholders(s, args))
-                .map(mm::deserialize)
-                .ifPresent(player::sendActionBar);
-        Optional.ofNullable(sound).ifPresent(player::playSound);
-        Optional.ofNullable(title).ifPresent(t -> t.sendMessage(player));
-    }
-
-    private static String setPlaceholders(String s, String... args) {
-        for (int i = 0; i < args.length; i++) {
-            s = s.replace("{" + i + "}", args[i]);
+    public void save(ConfigurationSection cfg) {
+        cfg.set("chat", chat);
+        cfg.set("actionbar", actionbar);
+        if (sound != null) {
+            cfg.set("sound.key", sound.name());
+            cfg.set("sound.source", sound.source().name());
+            cfg.set("sound.volume", sound.volume());
+            cfg.set("sound.pitch", sound.pitch());
         }
-        return s;
+        ConfigurationSection titleCfg = cfg.createSection("title");
+        if (title != null)
+            title.save(titleCfg);
+        else
+            titleCfg.set("title", null);
     }
 
-    @NoArgsConstructor(access = AccessLevel.PRIVATE)
-    private static class MessageTitle {
+    public void sendMessage(Audience audience, Player papiParsed, String... args) {
+        Optional.ofNullable(chat)
+                .map(s -> PlaceholderAPI.setPlaceholders(papiParsed, s))
+                .map(s -> setPlaceholders(s, args))
+                .map(mm::deserialize)
+                .ifPresent(audience::sendMessage);
+        Optional.ofNullable(actionbar)
+                .map(s -> PlaceholderAPI.setPlaceholders(papiParsed, s))
+                .map(s -> setPlaceholders(s, args))
+                .map(mm::deserialize)
+                .ifPresent(audience::sendActionBar);
+        Optional.ofNullable(sound).ifPresent(audience::playSound);
+        Optional.ofNullable(title).ifPresent(t -> t.sendMessage(audience, papiParsed));
+    }
+
+    public void chat(String chat) {
+        this.chat = chat;
+    }
+
+    public String chat() {
+        return chat;
+    }
+
+    public void actionbar(String actionbar) {
+        this.actionbar = actionbar;
+    }
+
+    public String actionbar() {
+        return actionbar;
+    }
+
+    public void sound(Sound sound) {
+        this.sound = sound;
+    }
+
+    public Sound sound() {
+        return sound;
+    }
+
+    public void title(MessageTitle title) {
+        this.title = title;
+    }
+
+    public MessageTitle title() {
+        return title;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Message message = (Message) o;
+
+        if (!Objects.equals(chat, message.chat)) return false;
+        if (!Objects.equals(actionbar, message.actionbar)) return false;
+        if (!Objects.equals(sound, message.sound)) return false;
+        return Objects.equals(title, message.title);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = chat != null ? chat.hashCode() : 0;
+        result = 31 * result + (actionbar != null ? actionbar.hashCode() : 0);
+        result = 31 * result + (sound != null ? sound.hashCode() : 0);
+        result = 31 * result + (title != null ? title.hashCode() : 0);
+        return result;
+    }
+
+    public static class MessageTitle {
         @Nullable
         private String title;
         @Nullable
@@ -99,17 +159,84 @@ public class Message {
             return t;
         }
 
-        public void sendMessage(Player player, String... args) {
+        public void save(ConfigurationSection titleCfg) {
+            titleCfg.set("title", title);
+            titleCfg.set("subtitle", subtitle);
+            if (times != null) {
+                titleCfg.set("in", times.fadeIn().toMillis() / 50);
+                titleCfg.set("stay", times.stay().toMillis() / 50);
+                titleCfg.set("out", times.fadeOut().toMillis() / 50);
+            } else {
+                titleCfg.set("in", 10);
+                titleCfg.set("stay", 70);
+                titleCfg.set("out", 20);
+            }
+        }
+
+        public void sendMessage(Audience audience, Player papiParsed, String... args) {
             String t = Optional.ofNullable(this.title)
-                    .map(k -> PlaceholderAPI.setPlaceholders(player, k))
+                    .map(k -> PlaceholderAPI.setPlaceholders(papiParsed, k))
                     .map(s -> setPlaceholders(s, args))
                     .orElse("");
             String s = Optional.ofNullable(subtitle)
-                    .map(k -> PlaceholderAPI.setPlaceholders(player, k))
+                    .map(k -> PlaceholderAPI.setPlaceholders(papiParsed, k))
                     .map(str -> setPlaceholders(str, args))
                     .orElse("");
             Title title = Title.title(mm.deserialize(t), mm.deserialize(s), times);
-            player.showTitle(title);
+            audience.showTitle(title);
         }
+
+        public void title(String title) {
+            this.title = title;
+        }
+
+        public String title() {
+            return title;
+        }
+
+        public void subtitle(String subtitle) {
+            this.subtitle = subtitle;
+        }
+
+        public String subtitle() {
+            return subtitle;
+        }
+
+        public void times(Title.Times times) {
+            if(times == null)
+                times = Title.Times.times(Duration.ofMillis(10 * 50), Duration.ofMillis(70 * 50), Duration.ofMillis(20 * 50));
+            this.times = times;
+        }
+
+        public Title.Times times() {
+            return times;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            MessageTitle that = (MessageTitle) o;
+
+            if (!Objects.equals(title, that.title)) return false;
+            if (!Objects.equals(subtitle, that.subtitle)) return false;
+            return Objects.equals(times, that.times);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = title != null ? title.hashCode() : 0;
+            result = 31 * result + (subtitle != null ? subtitle.hashCode() : 0);
+            result = 31 * result + (times != null ? times.hashCode() : 0);
+            return result;
+        }
+    }
+
+    private static String setPlaceholders(String s, String... args) {
+        for (int i = 0; i < args.length; i++) {
+            s = s.replace("{" + i + "}", args[i]);
+        }
+        return s;
     }
 }

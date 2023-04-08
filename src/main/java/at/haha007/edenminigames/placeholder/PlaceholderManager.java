@@ -1,7 +1,7 @@
 package at.haha007.edenminigames.placeholder;
 
 import at.haha007.edenminigames.EdenMinigames;
-import at.haha007.edenminigames.games.Minigame;
+import at.haha007.edenminigames.games.Game;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -15,11 +15,11 @@ public class PlaceholderManager extends PlaceholderExpansion {
     private final List<MinigamePlaceholders> placeholders = new ArrayList<>();
 
     public PlaceholderManager() {
-        EdenMinigames.registeredGames().stream()
+        EdenMinigames.instance().registeredGames().stream()
                 .filter(g -> g instanceof PlaceholderInitializer).forEach(this::register);
     }
 
-    private void register(Minigame minigame) {
+    private void register(Game minigame) {
         if (!(minigame instanceof PlaceholderInitializer)) throw new RuntimeException();
         MinigamePlaceholders minigamePlaceholders = new MinigamePlaceholders(minigame);
         ((PlaceholderInitializer) minigame).register(minigamePlaceholders);

@@ -33,8 +33,44 @@ tetris:
     y: 0
     z: 0
     world: "world"
+connect4:
+  lobby:
+      distance: 30
+      x: 0
+      y: 0
+      z: 0
+      world: "world"
+creeper_madness:
+  weight_name: "<green>Weight"
+  weight_amount: 5
+  broadcast_radius: 30
+  explosion_radius: 4
+  start_ticks: 200
+  lobby:
+    x: 0
+    y: 0
+    z: 0
+    yaw: 0
+    pitch: 0
+    world: "world"
+    radius: 30
+  from:
+    x: 0
+    y: 0
+    z: 0
+  to:
+    x: 10
+    y: 10
+    z: 10
+tnt_fight:
+  lobby:
+    x: 0
+    y: 0
+    z: 0
+    yaw: 0
+    pitch: 0
+    world: "world"
+    radius: 30
+  arenas:
 enabled:
 disabled:
-  - jnr
-  - mensch
-  - tetris

@@ -17,6 +17,7 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.title.Title;
 import org.bukkit.NamespacedKey;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.intellij.lang.annotations.Subst;
 import org.jetbrains.annotations.NotNull;
@@ -24,6 +25,7 @@ import org.jetbrains.annotations.NotNull;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Queue;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
@@ -130,6 +132,31 @@ public class MessageCommand {
         }
     }
 
+    @Command("history")
+    @Command("page{type:int}")
+    private void messageHistoryPage(CommandContext context) {
+        int page = context.parameter("page");
+        sendMessageHistory(context.sender(), page);
+    }
+
+    @Command("history")
+    private void messageHistory(CommandContext context) {
+        sendMessageHistory(context.sender(), 1);
+    }
+
+    private void sendMessageHistory(CommandSender sender, int page) {
+        Queue<String> keys = EdenMinigames.messenger().sentMessages();
+        int size = keys.size();
+        int from = 0;
+        int to = Math.min(from + 10, size);
+        sender.sendMessage(Component.text("Message history (page " + page + "):", NamedTextColor.GOLD));
+        for (int i = from; i < to; i++) {
+            String key = keys.poll();
+            sender.sendMessage(Component.text("- " + key, NamedTextColor.GOLD));
+        }
+    }
+
+
     @Command("edit")
     @Command("message{type:message}")
     @Command("titletimes set")
@@ -149,7 +176,7 @@ public class MessageCommand {
         fadeIn *= 50;
         stay *= 50;
         fadeOut *= 50;
-        Title.Times times = Title.Times.times(Duration.ofMillis(fadeIn), Duration.ofMillis(stay), Duration.ofMillis(fadeOut));
+        Title.Times times = Title.Times.of(Duration.ofMillis(fadeIn), Duration.ofMillis(stay), Duration.ofMillis(fadeOut));
         title.times(times);
         EdenMinigames.messenger().save();
         context.sender().sendMessage(Component.text("Set times!"));

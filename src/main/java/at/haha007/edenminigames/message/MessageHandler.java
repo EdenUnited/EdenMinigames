@@ -12,13 +12,11 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 public class MessageHandler {
     private final Map<String, Message> messages = new HashMap<>();
+    private final Queue<String> sentMessages = new LinkedList<>();
 
     @SneakyThrows
     public MessageHandler(JavaPlugin plugin) {
@@ -65,7 +63,7 @@ public class MessageHandler {
                 messagesInYml.put(sectionKey + "." + key, Message.parse(Objects.requireNonNull(section.getConfigurationSection(key))));
             }
         }
-        messages.entrySet().stream().filter(e -> ! e.getValue().equals(messagesInYml.get(e.getKey()))).forEach(e -> {
+        messages.entrySet().stream().filter(e -> !e.getValue().equals(messagesInYml.get(e.getKey()))).forEach(e -> {
             ConfigurationSection section = cfg.createSection(e.getKey());
             e.getValue().save(section);
         });
@@ -84,9 +82,16 @@ public class MessageHandler {
         sendMessage(key, player, player, args);
     }
 
+    public Queue<String> sentMessages() {
+        return sentMessages;
+    }
+
     public void sendMessage(String key, Audience audience, Player papiParsed, String... args) {
         if (audience == null)
             return;
+        sentMessages.add(key);
+        if (sentMessages.size() > 100)
+            sentMessages.poll();
         Message msg = messages.get(key);
         if (msg == null) {
             msg = new Message();

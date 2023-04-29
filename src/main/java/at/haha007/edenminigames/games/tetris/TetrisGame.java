@@ -8,6 +8,7 @@ import at.haha007.edencommands.tree.LiteralCommandNode;
 import at.haha007.edenminigames.EdenMinigames;
 import at.haha007.edenminigames.games.Game;
 import at.haha007.edenminigames.utils.ConfigUtils;
+import at.haha007.edenminigames.utils.ScoreTracker;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
@@ -17,6 +18,9 @@ import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.world.World;
 import com.sk89q.worldedit.world.block.BlockState;
 import com.sk89q.worldedit.world.block.BlockTypes;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -28,6 +32,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.List;
@@ -176,6 +181,7 @@ public class TetrisGame implements Game, Listener {
     private final Location location;
     private final Location lobbyCenter;
     private final double lobbyRadius;
+    private final ScoreTracker scoreTracker = new ScoreTracker("Tetris", 100);
 
     private int[][] board = new int[20][10];
     private int piece = 0;
@@ -407,8 +413,17 @@ public class TetrisGame implements Game, Listener {
         event.setCancelled(true);
     }
 
+    @EventHandler
+    private void onQuit(PlayerQuitEvent event) {
+        if (event.getPlayer() != player) return;
+        stop();
+    }
+
     private void stop() {
         EdenMinigames.messenger().sendMessage("tetris.end", player, String.valueOf(score), String.valueOf(linesCleared));
+        player.getInventory().clear();
+        scoreTracker.addScore(player, score);
+        scoreTracker.saveAsync();
         player = null;
     }
 
@@ -427,8 +442,41 @@ public class TetrisGame implements Game, Listener {
     @Override
     public void initCommand(LiteralCommandNode.LiteralCommandBuilder cmd) {
         AnnotatedCommandLoader annotatedCommandLoader = new AnnotatedCommandLoader(EdenMinigames.instance());
+        annotatedCommandLoader.addDefaultArgumentParsers();
         annotatedCommandLoader.addAnnotated(this);
         annotatedCommandLoader.getCommands().forEach(cmd::then);
+    }
+
+    @Command("top page{type:int} target{type:player}")
+    private void topCommand(CommandContext context) {
+        int page = context.parameter("page");
+        Player target = context.parameter("target");
+        List<ScoreTracker.PlayerScore> scores = scoreTracker.asList();
+        if (scores.size() == 0) {
+            EdenMinigames.messenger().sendMessage("tetris.no-scores", target);
+            return;
+        }
+        int from = (page - 1) * 10;
+        int to = Math.min(from + 10, scores.size());
+        EdenMinigames.messenger().sendMessage("tetris.top_header", target, String.valueOf(page), String.valueOf((scores.size() - 1) / 10 + 1));
+        for (int i = from; i < to; i++) {
+            ScoreTracker.PlayerScore score = scores.get(i);
+            String displayName = LegacyComponentSerializer.legacySection().serialize(MiniMessage.miniMessage().deserialize(score.displayName()));
+            EdenMinigames.messenger().sendMessage("tetris.top_entry", target, String.valueOf(i + 1), displayName, String.valueOf(score.score()));
+        }
+    }
+
+    @Command("score player{type:player}")
+    private void scoreCommand(CommandContext context) {
+        Player player = context.parameter("player");
+        long score;
+        try {
+            score = scoreTracker.getScore(player);
+        } catch (IllegalArgumentException e) {
+            EdenMinigames.messenger().sendMessage("tetris.no-score", player);
+            return;
+        }
+        EdenMinigames.messenger().sendMessage("tetris.score", player, String.valueOf(score));
     }
 
     @Command("start")
@@ -436,11 +484,11 @@ public class TetrisGame implements Game, Listener {
     private void startCommand(CommandContext context) {
         List<Player> players = List.copyOf(lobbyCenter.getNearbyPlayers(lobbyRadius));
         if (players.size() == 0) {
-            context.sender().sendMessage("No players in lobby");
+            context.sender().sendMessage(Component.text("No players found"));
             return;
         }
         Player player = players.get((int) (Math.random() * players.size()));
         start(player);
-        context.sender().sendMessage("Started game for " + player.getName());
+        context.sender().sendMessage(Component.text("Started game for " + player.getName()));
     }
 }

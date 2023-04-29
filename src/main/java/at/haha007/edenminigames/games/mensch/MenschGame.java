@@ -25,10 +25,13 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 
@@ -159,6 +162,14 @@ public class MenschGame implements Game, Listener {
     }
 
     @EventHandler
+    private void onInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (!activePlayers().contains(player)) return;
+        if (event.getSlotType() != InventoryType.SlotType.ARMOR) return;
+        event.setCancelled(true);
+    }
+
+    @EventHandler
     private void onPlayerMove(PlayerMoveEvent event) {
         int playerIndex = -1;
         Player player = event.getPlayer();
@@ -176,18 +187,53 @@ public class MenschGame implements Game, Listener {
     }
 
     private void tpToLobby(Player player) {
-        player.teleport(lobby);
+        Bukkit.getScheduler().runTask(EdenMinigames.instance(), () -> player.teleport(lobby));
     }
 
     private void tpToRespawn(int playerIndex) {
         Player player = players[playerIndex];
         if (player == null) return;
-        player.getInventory().clear();
-        player.getInventory().setItem(0, getWand());
-        player.teleport(spawnLocations[playerIndex]);
-        player.setGameMode(GameMode.ADVENTURE);
-        player.setAllowFlight(true);
-        player.setFlying(true);
+        Bukkit.getScheduler().runTask(EdenMinigames.instance(), () -> {
+            player.getInventory().clear();
+            player.getInventory().setItem(0, getWand());
+            player.teleport(spawnLocations[playerIndex]);
+            player.setGameMode(GameMode.ADVENTURE);
+            player.setAllowFlight(true);
+            player.setFlying(true);
+            ItemStack leggings = new ItemStack(Material.LEATHER_LEGGINGS);
+            ItemStack boots = new ItemStack(Material.LEATHER_BOOTS);
+            ItemStack helmet = new ItemStack(Material.LEATHER_HELMET);
+            ItemStack chestplate = new ItemStack(Material.LEATHER_CHESTPLATE);
+            Color color = switch (playerIndex) {
+                case 0 -> Color.RED;
+                case 1 -> Color.YELLOW;
+                case 2 -> Color.BLUE;
+                case 3 -> Color.GREEN;
+                default -> throw new IllegalStateException("Unexpected value: " + playerIndex);
+            };
+            setLeatherColor(leggings, color);
+            setLeatherColor(boots, color);
+            setLeatherColor(helmet, color);
+            setLeatherColor(chestplate, color);
+            player.getInventory().setLeggings(leggings);
+            player.getInventory().setBoots(boots);
+            player.getInventory().setHelmet(helmet);
+            player.getInventory().setChestplate(chestplate);
+            String colorMessageKey = switch (playerIndex) {
+                case 0 -> "mensch.color_red";
+                case 1 -> "mensch.color_yellow";
+                case 2 -> "mensch.color_blue";
+                case 3 -> "mensch.color_green";
+                default -> throw new IllegalStateException("Unexpected value: " + playerIndex);
+            };
+            EdenMinigames.messenger().sendMessage(colorMessageKey, player);
+        });
+    }
+
+    private void setLeatherColor(ItemStack item, Color color) {
+        LeatherArmorMeta meta = (LeatherArmorMeta) item.getItemMeta();
+        meta.setColor(color);
+        item.setItemMeta(meta);
     }
 
 
@@ -200,6 +246,7 @@ public class MenschGame implements Game, Listener {
         for (int i = 0; i < list.size(); i++) {
             this.players[i] = list.get(i);
             gameStates[i] = new PlayerGameState(i);
+            tpToRespawn(i);
         }
         broadcast("mensch.start_game", this.players[activePlayer]);
         display.clear(list.size());
@@ -315,7 +362,16 @@ public class MenschGame implements Game, Listener {
         long piecesInEnd = Arrays.stream(gameStates[activePlayer].getPositions()).filter(i -> i >= 44).count();
         if (piecesInEnd < 4) return;
         broadcast("mensch.game_win", players[activePlayer]);
+        for (Player player : activePlayers()) {
+            player.teleport(lobby);
+            player.getInventory().clear();
+            player.setGameMode(GameMode.ADVENTURE);
+            player.setFlying(false);
+            player.setAllowFlight(false);
+        }
         display.clear(4);
+        resetBoard();
+        activePlayers().forEach(this::tpToLobby);
         input.clickPieceCallback((i) -> {
         });
         input.throwDiceCallback(() -> {
@@ -406,6 +462,12 @@ public class MenschGame implements Game, Listener {
             players[i] = null;
             gameStates[i] = new PlayerGameState(i);
         }
+        input.throwDiceCallback(() -> {
+        });
+        input.clickPieceCallback((i) -> {
+        });
+        input.setActivePlayer(null, new int[4], 0);
+        display.clear(4);
     }
 
     public void stop(Player stopPlayer) {
@@ -414,6 +476,7 @@ public class MenschGame implements Game, Listener {
             Player player = players[i];
             if (player != stopPlayer) continue;
             players[i] = null;
+            tpToLobby(player);
             broadcast("mensch.stop_kick", players[activePlayer]);
             if (activePlayer == i)
                 setNextPlayerActive();
@@ -443,12 +506,21 @@ public class MenschGame implements Game, Listener {
     }
 
     @Command("save piece")
-    @Command("number{type:int,range:'1,4',suggest:'1,2,3,4'}")
+    @Command("number{type:int,range:'0,4',suggest:'1,2,3,4,0'}")
     private void savePieceCommand(CommandContext context) {
-        int piece = context.parameter("piece");
-        display.savePiece(piece);
+        int piece = context.parameter("number");
+        display.savePiece(piece - 1);
         context.sender().sendMessage(Component.text("Saved piece", NamedTextColor.GOLD));
     }
+
+    @Command("place dice")
+    @Command("number{type:int,range:'1,6',suggest:'1,2,3,4,5,6'}")
+    private void placeDice(CommandContext context) {
+        int piece = context.parameter("number");
+        display.displayDice(piece);
+        context.sender().sendMessage(Component.text("Placed Dice", NamedTextColor.GOLD));
+    }
+
 
     @Command("start")
     @Command("distance{type:double,range:'1,200',suggest:'1,5,10'}")

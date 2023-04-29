@@ -5,12 +5,14 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
+import org.jetbrains.annotations.NotNull;
 
 public class ConfigUtils {
     public static BlockVector3 blockVector3(ConfigurationSection config) {
         return BlockVector3.at(config.getInt("x"), config.getInt("y"), config.getInt("z"));
     }
 
+    @NotNull
     public static Location location(ConfigurationSection config) {
         String worldName = config.getString("world");
         if (worldName == null) throw new IllegalArgumentException("world is null");

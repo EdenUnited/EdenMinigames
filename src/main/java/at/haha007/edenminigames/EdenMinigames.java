@@ -1,9 +1,12 @@
 package at.haha007.edenminigames;
 
 import at.haha007.edenminigames.games.Game;
+import at.haha007.edenminigames.games.connectfour.ConnectFourGame;
+import at.haha007.edenminigames.games.creepermadness.CreeperMadnessGame;
 import at.haha007.edenminigames.games.jnr.JumpAndRunGame;
 import at.haha007.edenminigames.games.mensch.MenschGame;
 import at.haha007.edenminigames.games.tetris.TetrisGame;
+import at.haha007.edenminigames.games.tntfight.TntFightGame;
 import at.haha007.edenminigames.message.MessageHandler;
 import at.haha007.edenminigames.placeholder.PlaceholderManager;
 import lombok.Getter;
@@ -36,10 +39,14 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
     private final Map<String, Class<? extends Game>> allGames = Map.of(
             "mensch", MenschGame.class,
             "tetris", TetrisGame.class,
-            "jnr", JumpAndRunGame.class
+            "jnr", JumpAndRunGame.class,
+            "connect4", ConnectFourGame.class,
+            "tnt_fight", TntFightGame.class,
+            "creeper_madness", CreeperMadnessGame.class
     );
     private MessageHandler messageHandler;
     private SqliteDatabase database;
+    @Getter
     private PlaceholderManager placeholderManager;
 
     @Override

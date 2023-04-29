@@ -76,6 +76,7 @@ public class PathVisualizer {
         int lastId = entityIds.get(entityIds.size() - 1);
         displayPackets.add(createMetadataPacket(lastId, -1));
 
+        displayPackets.add(deleteTeamPacket());
         displayPackets.add(createTeamPacket(uuids));
 
         this.displayPackets.clear();
@@ -98,6 +99,13 @@ public class PathVisualizer {
         metadataPacket.getDataValueCollectionModifier().write(0, metadata);
 
         return metadataPacket;
+    }
+
+    private PacketContainer deleteTeamPacket() {
+        PacketContainer packet = new PacketContainer(PacketType.Play.Server.SCOREBOARD_TEAM);
+        packet.getStrings().write(0, "path_team");
+        packet.getIntegers().write(0, 1);
+        return packet;
     }
 
     private PacketContainer createTeamPacket(List<UUID> uuids) {

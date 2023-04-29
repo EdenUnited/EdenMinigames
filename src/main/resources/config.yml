@@ -1,0 +1,33 @@
+tnt_fight:
+  lobby:
+    x: 0
+    y: 0
+    z: 0
+    yaw: 0
+    pitch: 0
+    world: "world"
+    radius: 30
+  arenas:
+    arena1:
+      from:
+        x: 0
+        y: 0
+        z: 0
+      to:
+        x: 0
+        y: 0
+        z: 0
+      world: "world"
+      spawns:
+        1:
+          x: 0
+          y: 0
+          z: 0
+          yaw: 0
+          pitch: 0
+        2:
+          x: 0
+          y: 0
+          z: 0
+          yaw: 0
+          pitch: 0

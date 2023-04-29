@@ -11,11 +11,15 @@ import at.haha007.edencommands.argument.ParsedArgument;
 import at.haha007.edencommands.tree.LiteralCommandNode.LiteralCommandBuilder;
 import at.haha007.edenminigames.EdenMinigames;
 import at.haha007.edenminigames.games.Game;
+import at.haha007.edenminigames.message.MessageHandler;
 import at.haha007.edenminigames.utils.ConfigUtils;
+import at.haha007.edenminigames.utils.ScoreTracker;
 import com.destroystokyo.paper.event.server.AsyncTabCompleteEvent.Completion;
 import com.sk89q.worldedit.math.BlockVector3;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.apache.commons.lang3.time.DurationFormatUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -51,10 +55,12 @@ public class JumpAndRunGame implements Game, Listener {
     private final Map<Player, JumpAndRun> activeJumpAndRuns = new HashMap<>();
     private final Map<Player, Map<String, JnrRun>> playerCache = new HashMap<>();
     private final Location lobby;
+    private final Map<String, ScoreTracker> scoreTracker = new HashMap<>();
 
     public JumpAndRunGame() {
         Bukkit.getPluginManager().registerEvents(this, EdenMinigames.instance());
         loadJumpAndRuns();
+        jumpAndRuns.keySet().forEach(this::getScoreTracker);
         FileConfiguration config = EdenMinigames.instance().getConfig();
         ConfigurationSection jnrSection = config.getConfigurationSection("jnr");
         if (jnrSection == null) throw new IllegalArgumentException("jumpAndRun is null");
@@ -114,8 +120,12 @@ public class JumpAndRunGame implements Game, Listener {
         List<BlockVector3> cps = jnr.getCheckPoints().stream().map(CheckPoint::getPosition).toList();
         if (nextCpIndex >= cps.size() - 1) {
             long time = System.currentTimeMillis() - run.startedAt;
+            ScoreTracker scoreTracker = getScoreTracker(jnr.getKey());
+            scoreTracker.addScore(player, -time);
+            scoreTracker.saveAsync();
+            int place = scoreTracker.getPlace(player);
             String duration = DurationFormatUtils.formatDuration(time, "HH:mm:ss");
-            EdenMinigames.messenger().sendMessage("jumpAndRun.time", player, duration);
+            EdenMinigames.messenger().sendMessage("jumpAndRun.time", player, duration, String.valueOf(place + 1));
             reset(player);
             stop(player);
             return;
@@ -130,13 +140,21 @@ public class JumpAndRunGame implements Game, Listener {
     private static PersistentDataContainer getJnrContainer(Player player, String jnrKey) {
         PersistentDataContainer jnrpdc = getJnrContainer(player);
         NamespacedKey key = new NamespacedKey(EdenMinigames.instance(), jnrKey);
-        return jnrpdc.getOrDefault(key, PersistentDataType.TAG_CONTAINER, jnrpdc.getAdapterContext().newPersistentDataContainer());
+        PersistentDataContainer pdc = jnrpdc.getOrDefault(key, PersistentDataType.TAG_CONTAINER, jnrpdc.getAdapterContext().newPersistentDataContainer());
+        jnrpdc.set(key, PersistentDataType.TAG_CONTAINER, pdc);
+        return pdc;
     }
 
     private static PersistentDataContainer getJnrContainer(Player player) {
         PersistentDataContainer playerpdc = player.getPersistentDataContainer();
         NamespacedKey key = new NamespacedKey(EdenMinigames.instance(), "jnr");
-        return playerpdc.getOrDefault(key, PersistentDataType.TAG_CONTAINER, playerpdc.getAdapterContext().newPersistentDataContainer());
+        PersistentDataContainer pdc = playerpdc.getOrDefault(key, PersistentDataType.TAG_CONTAINER, playerpdc.getAdapterContext().newPersistentDataContainer());
+        playerpdc.set(key, PersistentDataType.TAG_CONTAINER, pdc);
+        return pdc;
+    }
+
+    private ScoreTracker getScoreTracker(String key) {
+        return scoreTracker.computeIfAbsent(key, k -> new ScoreTracker("jnr_" + key, 100));
     }
 
     public void start(Player player, String key) {
@@ -155,7 +173,7 @@ public class JumpAndRunGame implements Game, Listener {
 
     @Override
     public void stop(Player player) {
-        activeJumpAndRuns.remove(player);
+        if (activeJumpAndRuns.remove(player) == null) return;
         player.teleport(lobby);
         player.getInventory().clear();
         EdenMinigames.messenger().sendMessage("jumpAndRun.stop", player);
@@ -167,6 +185,7 @@ public class JumpAndRunGame implements Game, Listener {
         JnrRun run = getRun(player, jnr.getKey());
         run.checkpoint = 0;
         run.startedAt = System.currentTimeMillis();
+        EdenMinigames.messenger().sendMessage("jumpAndRun.reset", player);
         respawn(player);
     }
 
@@ -284,6 +303,7 @@ public class JumpAndRunGame implements Game, Listener {
     }
 
     @Command("cp teleport key{type:jnr} index{type:int,suggestions:'0'}")
+    @SyncCommand
     private void cpTeleportCommand(CommandContext context) {
         if (!(context.sender() instanceof Player player)) {
             context.sender().sendMessage(Component.text("Only players can use this command"));
@@ -400,10 +420,51 @@ public class JumpAndRunGame implements Game, Listener {
         context.sender().sendMessage(Component.text("Hiding " + jnr.getKey()));
     }
 
+    @Command("score key{type:jnr} player{type:player}")
+    private void scoreCommand(CommandContext context) {
+        JumpAndRun jnr = context.parameter("key");
+        Player player = context.parameter("player");
+        ScoreTracker scoreTracker = getScoreTracker(jnr.getKey());
+        ScoreTracker.PlayerScore playerScore = scoreTracker.getPlayerScore(player);
+        MessageHandler messenger = EdenMinigames.messenger();
+        if (playerScore == null) {
+            messenger.sendMessage("jumpAndRun.no_score", player);
+        } else {
+            int place = scoreTracker.getPlace(player);
+            String time = DurationFormatUtils.formatDuration(-playerScore.score().score(), "mm:ss");
+            messenger.sendMessage("jumpAndRun.score", player, time, String.valueOf(place));
+        }
+    }
+
+    @Command("top key{type:jnr} player{type:player} page{type:int,suggestions:'1'}")
+    private void scoreTopCommand(CommandContext context) {
+        JumpAndRun jnr = context.parameter("key");
+        Player player = context.parameter("player");
+        ScoreTracker scoreTracker = getScoreTracker(jnr.getKey());
+        MessageHandler messenger = EdenMinigames.messenger();
+        int page = context.parameter("page");
+        if (page < 1) {
+            context.sender().sendMessage(Component.text("Invalid page " + page));
+            return;
+        }
+        List<ScoreTracker.PlayerScore> scores = scoreTracker.asList();
+        int from = (page - 1) * 10;
+        int to = Math.min(from + 10, scores.size());
+        messenger.sendMessage("jumpAndRun.top_header", player, String.valueOf(page), String.valueOf((scores.size() + 9) / 10), String.valueOf(scores.size()));
+        for (int i = from; i < to; i++) {
+            ScoreTracker.PlayerScore score = scores.get(i);
+            String time = DurationFormatUtils.formatDuration(-score.score().score(), "mm:ss");
+            Component displayName = MiniMessage.miniMessage().deserialize(score.displayName());
+            String legacy = LegacyComponentSerializer.legacySection().serialize(displayName);
+            messenger.sendMessage("jumpAndRun.top_entry", player, String.valueOf(i + 1), legacy, time);
+        }
+    }
+
     private JnrRun getRun(Player player, String key) {
         Map<String, JnrRun> cache = playerCache.computeIfAbsent(player, p -> new HashMap<>());
         return cache.computeIfAbsent(key, k -> JnrRun.getOrCreate(player, k));
     }
+
 
     private static final class JnrRun {
         private final String key;

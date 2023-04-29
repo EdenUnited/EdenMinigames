@@ -89,10 +89,12 @@ public class BlockGameWorldHandler implements MenschDisplay, MenschInput, Listen
         BlockVector3 to = from.add(fieldSize, coordinateCalculator.height(), fieldSize);
         com.sk89q.worldedit.world.World weWorld = BukkitAdapter.adapt(world);
         CuboidRegion region = new CuboidRegion(weWorld, from, to);
-        try (Clipboard clipboard = Clipboard.create(region);
-             FileOutputStream fos = new FileOutputStream(pieceSchematicFile(number));
-             ClipboardWriter writer = BuiltInClipboardFormat.FAST.getWriter(fos)) {
-            writer.write(clipboard);
+        try (Clipboard clipboard = Clipboard.create(region)) {
+            clipboard.setOrigin(from);
+            try (FileOutputStream fos = new FileOutputStream(pieceSchematicFile(number));
+                 ClipboardWriter writer = BuiltInClipboardFormat.FAST.getWriter(fos)) {
+                writer.write(clipboard);
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -105,10 +107,12 @@ public class BlockGameWorldHandler implements MenschDisplay, MenschInput, Listen
         BlockVector3 to = from.add(fieldSize, coordinateCalculator.height(), fieldSize);
         com.sk89q.worldedit.world.World weWorld = BukkitAdapter.adapt(world);
         CuboidRegion region = new CuboidRegion(weWorld, from, to);
-        try (Clipboard clipboard = Clipboard.create(region);
-             FileOutputStream fos = new FileOutputStream(diceSchematicFile(number));
-             ClipboardWriter writer = BuiltInClipboardFormat.FAST.getWriter(fos)) {
-            writer.write(clipboard);
+        try (Clipboard clipboard = Clipboard.create(region)) {
+            clipboard.setOrigin(from);
+            try (FileOutputStream fos = new FileOutputStream(diceSchematicFile(number));
+                 ClipboardWriter writer = BuiltInClipboardFormat.FAST.getWriter(fos)) {
+                writer.write(clipboard);
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -120,7 +124,7 @@ public class BlockGameWorldHandler implements MenschDisplay, MenschInput, Listen
         from = MenschGame.worldPosition(from, playerIndex);
         to = MenschGame.worldPosition(to, playerIndex);
 
-        if (from > 0)
+        if (from >= 0)
             placePiece(MenschGame.BOARD_COORDINATES.get(from), -1);
         if (to > 0)
             placePiece(MenschGame.BOARD_COORDINATES.get(to), player);
@@ -145,7 +149,6 @@ public class BlockGameWorldHandler implements MenschDisplay, MenschInput, Listen
             return;
         }
         BlockVector3 blockVector3 = coordinateCalculator.getWorldCoordinate(coordinate.xy());
-        blockVector3.subtract(clipboard.getOrigin());
         try (EditSession editSession = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(world))) {
             Operation operation = new ClipboardHolder(clipboard).createPaste(editSession).to(blockVector3).build();
             Operations.complete(operation);
@@ -170,7 +173,6 @@ public class BlockGameWorldHandler implements MenschDisplay, MenschInput, Listen
             return;
         }
         BlockVector3 blockVector3 = coordinateCalculator.getWorldCoordinate(BlockVector2.at(5, 5));
-        blockVector3.subtract(clipboard.getOrigin());
         try (EditSession editSession = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(world))) {
             Operation operation = new ClipboardHolder(clipboard).createPaste(editSession).to(blockVector3).build();
             Operations.complete(operation);

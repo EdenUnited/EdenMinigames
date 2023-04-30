@@ -129,7 +129,7 @@ public class ConnectFourGame implements Game, Listener {
                 List<BlockVector2> list = checkWin(x, y, player);
                 if (!list.isEmpty()) {
                     for (BlockVector2 blockVector2 : list) {
-                        board[blockVector2.getBlockX()][blockVector2.getBlockZ()] = activePlayer ? 3 : 4;
+                        board[blockVector2.getBlockX()][blockVector2.getBlockZ()] = activePlayer ? 4 : 3;
                     }
                     stop(activePlayer ? playerB : playerA);
                     return true;

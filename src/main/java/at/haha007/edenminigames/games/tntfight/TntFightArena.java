@@ -279,6 +279,7 @@ public class TntFightArena implements Listener {
 
     public void stop(Player player) {
         if (!players.containsKey(player)) return;
+        EdenMinigames.messenger().sendMessage("tntfight.lost", player);
         players.remove(player);
         broadcast("tntfight.stop", player);
         exit(player);

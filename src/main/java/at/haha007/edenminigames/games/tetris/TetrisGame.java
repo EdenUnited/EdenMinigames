@@ -29,10 +29,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.player.PlayerDropItemEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerItemHeldEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.List;
@@ -372,6 +369,7 @@ public class TetrisGame implements Game, Listener {
             nextPiece();
         }
         updateDisplay();
+        if (player == null) return;
         Bukkit.getScheduler().runTaskLater(EdenMinigames.instance(), this::tick, tickDelay);
     }
 
@@ -425,6 +423,12 @@ public class TetrisGame implements Game, Listener {
         scoreTracker.addScore(player, score);
         scoreTracker.saveAsync();
         player = null;
+    }
+
+    @EventHandler
+    private void onTeleport(PlayerTeleportEvent event) {
+        if (event.getPlayer() != player) return;
+        stop();
     }
 
     @Override

@@ -187,7 +187,17 @@ public class MenschGame implements Game, Listener {
     }
 
     private void tpToLobby(Player player) {
-        Bukkit.getScheduler().runTask(EdenMinigames.instance(), () -> player.teleport(lobby));
+        player.teleport(lobby);
+        player.setGameMode(GameMode.ADVENTURE);
+        player.setAllowFlight(false);
+        player.setFlying(false);
+        player.getInventory().clear();
+        player.setHealth(20);
+        player.setFoodLevel(20);
+        player.setSaturation(20);
+        player.setFireTicks(0);
+        player.setFallDistance(0);
+        player.setVelocity(new Vector(0, 0, 0));
     }
 
     private void tpToRespawn(int playerIndex) {

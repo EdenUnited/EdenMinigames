@@ -355,7 +355,6 @@ public class JumpAndRunGame implements Game, Listener {
             context.sender().sendMessage(Component.text("Only players can use this command"));
             return;
         }
-        String key = context.parameter("key");
         JumpAndRun jnr = context.parameter("key");
         int index = context.parameter("index");
         if (index < 0 || index >= jnr.getCheckPoints().size()) {
@@ -368,7 +367,7 @@ public class JumpAndRunGame implements Game, Listener {
         jnr.getCheckPoints().set(index, checkPoint);
         jnr.updateVisualizer();
         jnr.save();
-        context.sender().sendMessage(Component.text("Set checkpoint " + index + " for " + key));
+        context.sender().sendMessage(Component.text("Set checkpoint " + index + " for " + jnr.getKey()));
     }
 
     @Command("cp nearest key{type:jnr}")

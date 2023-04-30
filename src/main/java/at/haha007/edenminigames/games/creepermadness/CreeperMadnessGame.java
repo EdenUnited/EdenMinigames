@@ -95,6 +95,7 @@ public class CreeperMadnessGame implements Game, Listener {
         }
         this.players.addAll(players);
         this.players.removeIf(Objects::isNull);
+        tick = 0;
         players.forEach(player -> {
             Block target = null;
             for (int i = 0; i < 100; i++) {
@@ -161,6 +162,7 @@ public class CreeperMadnessGame implements Game, Listener {
         if (!event.getItem().isSimilar(weight)) return;
         event.getPlayer().setVelocity(new Vector());
         event.getPlayer().setFallDistance(0);
+        event.getPlayer().playSound(event.getPlayer().getLocation(), Sound.BLOCK_ANVIL_LAND, 1, 1);
         event.getItem().setAmount(event.getItem().getAmount() - 1);
         event.setCancelled(true);
     }
@@ -202,9 +204,9 @@ public class CreeperMadnessGame implements Game, Listener {
     private void checkWin() {
         if (players.size() != 1) return;
         Player winner = players.get(0);
-        players.clear();
         broadcast("creeper_madness.win", winner);
         stop(winner);
+        players.clear();
     }
 
     @Override
@@ -229,9 +231,9 @@ public class CreeperMadnessGame implements Game, Listener {
         }
         var players = lobby.getNearbyPlayers(lobbyDistance);
         start(players);
-        if(activePlayers().isEmpty()){
+        if (activePlayers().isEmpty()) {
             context.sender().sendMessage(Component.text("Not enough players!"));
-        }else {
+        } else {
             context.sender().sendMessage(Component.text("Started game with " + activePlayers().size() + " players"));
         }
     }
@@ -349,7 +351,7 @@ public class CreeperMadnessGame implements Game, Listener {
             Vector v = new Vector(x, y, z);
             player.setVelocity(v);
         });
-        getBlocksInRadius(location, explosionRadius).forEach(block -> {
+        getBlocksInRadius(location, explosionRadius).filter(b -> box.contains(b.getLocation().toVector())).forEach(block -> {
             if (block.getType() == Material.AIR) return;
             BlockData blockData = block.getBlockData();
             block.setType(Material.AIR);

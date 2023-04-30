@@ -126,7 +126,7 @@ public class BlockGameWorldHandler implements MenschDisplay, MenschInput, Listen
 
         if (from >= 0)
             placePiece(MenschGame.BOARD_COORDINATES.get(from), -1);
-        if (to > 0)
+        if (to >= 0)
             placePiece(MenschGame.BOARD_COORDINATES.get(to), player);
     }
 

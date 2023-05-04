@@ -8,6 +8,7 @@ import at.haha007.edencommands.tree.LiteralCommandNode;
 import at.haha007.edenminigames.EdenMinigames;
 import at.haha007.edenminigames.games.Game;
 import at.haha007.edenminigames.utils.ConfigUtils;
+import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
 import com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard;
 import com.sk89q.worldedit.extent.clipboard.Clipboard;
@@ -34,6 +35,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerAttemptPickupItemEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
@@ -55,7 +57,7 @@ public class CreeperMadnessGame implements Game, Listener {
     private final Location lobby;
     private final double lobbyDistance;
     private final double explosionRadius;
-    private final ItemStack weight = new ItemStack(Material.IRON_INGOT, 1);
+    private final ItemStack feather = new ItemStack(Material.FEATHER, 1);
     private int tick;
 
 
@@ -67,7 +69,7 @@ public class CreeperMadnessGame implements Game, Listener {
         BlockVector3 to = ConfigUtils.blockVector3(Objects.requireNonNull(config.getConfigurationSection("to")));
         box = BoundingBox.of(new Vector(from.getX(), from.getY(), from.getZ()), new Vector(to.getX(), to.getY(), to.getZ()));
         Component weightName = MiniMessage.miniMessage().deserialize(config.getString("weight_name", "<green>Weight"));
-        weight.editMeta(meta -> meta.displayName(weightName));
+        feather.editMeta(meta -> meta.displayName(weightName));
         startWeightAmount = config.getInt("weight_amount", 5);
         lobby = ConfigUtils.location(Objects.requireNonNull(config.getConfigurationSection("lobby")));
         world = lobby.getWorld();
@@ -89,7 +91,8 @@ public class CreeperMadnessGame implements Game, Listener {
         try (Clipboard clipboard = BuiltInClipboardFormat.FAST.load(schematicFile)) {
             Vector min = box.getMin();
             BlockVector3 at = BlockVector3.at(min.getX(), min.getY(), min.getZ());
-            clipboard.paste(BukkitAdapter.adapt(world), at);
+            EditSession es = clipboard.paste(BukkitAdapter.adapt(world), at);
+            es.close();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -110,7 +113,7 @@ public class CreeperMadnessGame implements Game, Listener {
             Location tpTarget = target.getLocation().add(0.5, 1, 0.5);
             tpTarget.setYaw(random.nextInt(360));
             player.teleport(tpTarget);
-            ItemStack weight = this.weight.clone();
+            ItemStack weight = this.feather.clone();
             weight.setAmount(startWeightAmount);
             player.setGameMode(GameMode.ADVENTURE);
             player.setFlying(false);
@@ -156,11 +159,17 @@ public class CreeperMadnessGame implements Game, Listener {
     }
 
     @EventHandler
+    void onPlayerDropItem(PlayerDropItemEvent event){
+        if(!players.contains(event.getPlayer())) return;
+        event.setCancelled(true);
+    }
+
+    @EventHandler
     private void onPlayerInteract(PlayerInteractEvent event) {
         if (!players.contains(event.getPlayer())) return;
         if (event.getItem() == null) return;
-        if (!event.getItem().isSimilar(weight)) return;
-        event.getPlayer().setVelocity(new Vector());
+        if (!event.getItem().isSimilar(feather)) return;
+        event.getPlayer().setVelocity(new Vector(0, 1, 0));
         event.getPlayer().setFallDistance(0);
         event.getPlayer().playSound(event.getPlayer().getLocation(), Sound.BLOCK_ANVIL_LAND, 1, 1);
         event.getItem().setAmount(event.getItem().getAmount() - 1);
@@ -398,7 +407,7 @@ public class CreeperMadnessGame implements Game, Listener {
                 ", lobby=" + lobby +
                 ", lobbyDistance=" + lobbyDistance +
                 ", explosionRadius=" + explosionRadius +
-                ", weight=" + weight +
+                ", weight=" + feather +
                 ", tick=" + tick +
                 '}';
     }

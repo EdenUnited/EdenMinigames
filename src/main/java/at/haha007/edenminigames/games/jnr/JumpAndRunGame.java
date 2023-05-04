@@ -2,12 +2,16 @@ package at.haha007.edenminigames.games.jnr;
 
 import at.haha007.edencommands.CommandContext;
 import at.haha007.edencommands.CommandException;
+import at.haha007.edencommands.CommandRegistry;
 import at.haha007.edencommands.annotations.AnnotatedCommandLoader;
 import at.haha007.edencommands.annotations.ArgumentParser;
 import at.haha007.edencommands.annotations.Command;
 import at.haha007.edencommands.annotations.SyncCommand;
 import at.haha007.edencommands.argument.Argument;
 import at.haha007.edencommands.argument.ParsedArgument;
+import at.haha007.edencommands.argument.StringArgument;
+import at.haha007.edencommands.tree.ArgumentCommandNode;
+import at.haha007.edencommands.tree.LiteralCommandNode;
 import at.haha007.edencommands.tree.LiteralCommandNode.LiteralCommandBuilder;
 import at.haha007.edenminigames.EdenMinigames;
 import at.haha007.edenminigames.games.Game;
@@ -17,14 +21,14 @@ import at.haha007.edenminigames.utils.ScoreTracker;
 import com.destroystokyo.paper.event.server.AsyncTabCompleteEvent.Completion;
 import com.sk89q.worldedit.math.BlockVector3;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.apache.commons.lang3.time.DurationFormatUtils;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
+import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -32,15 +36,20 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +65,7 @@ public class JumpAndRunGame implements Game, Listener {
     private final Map<Player, Map<String, JnrRun>> playerCache = new HashMap<>();
     private final Location lobby;
     private final Map<String, ScoreTracker> scoreTracker = new HashMap<>();
+    List<Player> blocked = new ArrayList<>();
 
     public JumpAndRunGame() {
         Bukkit.getPluginManager().registerEvents(this, EdenMinigames.instance());
@@ -67,6 +77,41 @@ public class JumpAndRunGame implements Game, Listener {
         ConfigurationSection lobbySection = jnrSection.getConfigurationSection("lobby");
         if (lobbySection == null) throw new IllegalArgumentException("lobby is null");
         lobby = ConfigUtils.location(lobbySection);
+        new CommandRegistry(EdenMinigames.instance()).register(LiteralCommandNode.builder("resetjnr").then(ArgumentCommandNode.builder("jnr", StringArgument.builder().build()).executor(c -> {
+            if (!(c.sender() instanceof Player player)) {
+                c.sender().sendMessage(Component.text("Only players can use this command", NamedTextColor.RED));
+                return;
+            }
+            String key = c.parameter("jnr");
+            JumpAndRun jnr = jumpAndRuns.get(key);
+            if (jnr == null) {
+                EdenMinigames.messenger().sendMessage("jumpAndRun.notFound", player, key);
+                return;
+            }
+            JnrRun run = getRun(player, jnr.getKey());
+            EdenMinigames.messenger().sendMessage("jumpAndRun.reset",
+                    player,
+                    String.valueOf(run.checkpoint),
+                    formatDuration(System.currentTimeMillis() - run.startedAt),
+                    String.valueOf(run.fails));
+            Bukkit.getScheduler().runTask(EdenMinigames.instance(), () -> reset(player, jnr));
+        })).build());
+        Bukkit.getScheduler().scheduleSyncRepeatingTask(EdenMinigames.instance(), () -> {
+            for (Player player : activeJumpAndRuns.keySet()) {
+                sendActionBar(player);
+            }
+        }, 0, 20);
+        Bukkit.getScheduler().scheduleSyncRepeatingTask(EdenMinigames.instance(), () -> blocked.clear(), 0, 1);
+    }
+
+    private void sendActionBar(Player player) {
+        JumpAndRun jnr = activeJumpAndRuns.get(player);
+        if (jnr == null) return;
+        JnrRun run = getRun(player, jnr.getKey());
+        String duration = formatDuration(System.currentTimeMillis() - run.startedAt);
+        String fails = String.valueOf(run.fails);
+        String actionBar = "<gold>%s <green>| <gold>%s Fails".formatted(duration, fails);
+        player.sendActionBar(MiniMessage.miniMessage().deserialize(actionBar));
     }
 
     private void loadJumpAndRuns() {
@@ -80,7 +125,8 @@ public class JumpAndRunGame implements Game, Listener {
     @EventHandler
     private void onPlayerQuit(PlayerQuitEvent event) {
         stop(event.getPlayer());
-        Map<String, JnrRun> cache = playerCache.remove(event.getPlayer());
+        Map<String, JnrRun> cache = playerCache.get(event.getPlayer());
+        playerCache.remove(event.getPlayer());
         if (cache == null) return;
         for (JnrRun run : cache.values()) {
             run.save(event.getPlayer());
@@ -88,15 +134,35 @@ public class JumpAndRunGame implements Game, Listener {
     }
 
     @EventHandler
+    private void onPlayerDropItem(PlayerDropItemEvent event){
+        if(!activeJumpAndRuns.containsKey(event.getPlayer())) return;
+        event.setCancelled(true);
+    }
+
+    @EventHandler
     private void onPlayerInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
         if (!activeJumpAndRuns.containsKey(player)) return;
-        if (!event.getAction().isLeftClick() && !event.getAction().isRightClick()) return;
         event.setCancelled(true);
+        if (!event.getAction().isLeftClick() && !event.getAction().isRightClick()) return;
+        if (event.getHand() != EquipmentSlot.HAND) return;
+        if(blocked.contains(player)) return;
+        blocked.add(player);
         int slot = player.getInventory().getHeldItemSlot();
-        if (slot == 1) respawn(player);
-        if (slot == 4) reset(player);
+        if (slot == 1) {
+            JnrRun run = getRun(player, activeJumpAndRuns.get(player).getKey());
+            run.fails++;
+            respawn(player, true);
+        }
+        if (slot == 5) resetRequest(player);
         if (slot == 7) stop(player);
+    }
+
+    @EventHandler
+    private void onDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        if (!activeJumpAndRuns.containsKey(player)) return;
+        event.setCancelled(true);
     }
 
     @EventHandler
@@ -118,15 +184,21 @@ public class JumpAndRunGame implements Game, Listener {
         int cpIndex = run.checkpoint;
         int nextCpIndex = cpIndex + 1;
         List<BlockVector3> cps = jnr.getCheckPoints().stream().map(CheckPoint::getPosition).toList();
-        if (nextCpIndex >= cps.size() - 1) {
+        if (nextCpIndex >= cps.size()) {
             long time = System.currentTimeMillis() - run.startedAt;
             ScoreTracker scoreTracker = getScoreTracker(jnr.getKey());
             scoreTracker.addScore(player, -time);
             scoreTracker.saveAsync();
             int place = scoreTracker.getPlace(player);
-            String duration = DurationFormatUtils.formatDuration(time, "HH:mm:ss");
-            EdenMinigames.messenger().sendMessage("jumpAndRun.time", player, duration, String.valueOf(place + 1));
-            reset(player);
+            String duration = formatDuration(time);
+            EdenMinigames.messenger().sendMessage("jumpAndRun.time",
+                    player,
+                    jnr.getKey(),
+                    duration,
+                    String.valueOf(run.fails),
+                    String.valueOf(place + 1)
+            );
+            reset(player, jnr);
             stop(player);
             return;
         }
@@ -134,7 +206,14 @@ public class JumpAndRunGame implements Game, Listener {
         if (cp == null) return;
         if (cp.getBlockX() != block.getX() || cp.getBlockY() != block.getY() || cp.getBlockZ() != block.getZ()) return;
         run.checkpoint++;
-        EdenMinigames.messenger().sendMessage("jumpAndRun.checkpointReached", player, String.valueOf(cpIndex));
+        long time = System.currentTimeMillis() - run.startedAt;
+        String duration = formatDuration(time);
+        EdenMinigames.messenger().sendMessage("jumpAndRun.checkpointReached",
+                player,
+                String.valueOf(nextCpIndex),
+                duration,
+                String.valueOf(run.fails),
+                String.valueOf(cps.size() - 1));
     }
 
     private static PersistentDataContainer getJnrContainer(Player player, String jnrKey) {
@@ -168,44 +247,67 @@ public class JumpAndRunGame implements Game, Listener {
             return;
         }
         activeJumpAndRuns.put(player, jumpAndRun);
-        respawn(player);
+        EdenMinigames.messenger().sendMessage("jumpAndRun.start", player, key);
+        respawn(player, false);
     }
 
-    @Override
-    public void stop(Player player) {
+    public void stop(Player player, boolean sendMessage) {
         if (activeJumpAndRuns.remove(player) == null) return;
         player.teleport(lobby);
         player.getInventory().clear();
-        EdenMinigames.messenger().sendMessage("jumpAndRun.stop", player);
+        if (sendMessage)
+            EdenMinigames.messenger().sendMessage("jumpAndRun.stop", player);
     }
 
-    private void reset(Player player) {
+    public void stop(Player player) {
+        stop(player, true);
+    }
+
+    private void resetRequest(Player player) {
         JumpAndRun jnr = activeJumpAndRuns.get(player);
         if (jnr == null) return;
+        Component message = Component.text("Reset", NamedTextColor.RED, TextDecoration.BOLD)
+                .hoverEvent(HoverEvent.showText(Component.text("Click to reset")))
+                .clickEvent(ClickEvent.runCommand("/resetjnr " + jnr.getKey()));
+        player.sendMessage(message);
+    }
+
+    private void reset(Player player, JumpAndRun jnr) {
         JnrRun run = getRun(player, jnr.getKey());
-        run.checkpoint = 0;
-        run.startedAt = System.currentTimeMillis();
-        EdenMinigames.messenger().sendMessage("jumpAndRun.reset", player);
-        respawn(player);
+        run.reset();
+        respawn(player, false);
     }
 
-    private void respawn(Player player) {
+    private void respawn(Player player, boolean sendMessage) {
         JumpAndRun jnr = activeJumpAndRuns.get(player);
         if (jnr == null) return;
+        sendActionBar(player);
         JnrRun run = getRun(player, jnr.getKey());
         jnr.tpToCheckpoint(player, run.checkpoint);
-        if (run.checkpoint == 0) run.startedAt = System.currentTimeMillis();
-        ItemStack respawnItem = new ItemStack(Material.IRON_BARS);
-        ItemStack resetItem = new ItemStack(Material.REDSTONE);
+        long time = System.currentTimeMillis() - run.startedAt;
+        ItemStack respawnItem = new ItemStack(Material.REDSTONE);
+        ItemStack resetItem = new ItemStack(Material.STRUCTURE_VOID);
         ItemStack stopItem = new ItemStack(Material.BARRIER);
         respawnItem.editMeta(meta -> meta.displayName(Component.text("Respawn", NamedTextColor.GREEN)));
         resetItem.editMeta(meta -> meta.displayName(Component.text("Reset", NamedTextColor.GREEN)));
         stopItem.editMeta(meta -> meta.displayName(Component.text("Exit", NamedTextColor.GREEN)));
         player.getInventory().clear();
         player.getInventory().setItem(1, respawnItem);
-        player.getInventory().setItem(4, resetItem);
+        player.getInventory().setItem(5, resetItem);
         player.getInventory().setItem(7, stopItem);
-        EdenMinigames.messenger().sendMessage("jumpAndRun.respawn", player);
+
+        player.setVelocity(new Vector());
+        player.setGameMode(GameMode.ADVENTURE);
+        player.setFlying(false);
+        player.setAllowFlight(false);
+        player.setHealth(20);
+        player.setFoodLevel(20);
+        player.setSaturation(20);
+        player.setFireTicks(0);
+        player.setFallDistance(0);
+        player.getInventory().setHeldItemSlot(1);
+        if (sendMessage)
+            EdenMinigames.messenger().sendMessage("jumpAndRun.respawn", player, String.valueOf(run.checkpoint), formatDuration(time), String.valueOf(run.fails));
     }
 
     @Override
@@ -430,7 +532,7 @@ public class JumpAndRunGame implements Game, Listener {
             messenger.sendMessage("jumpAndRun.no_score", player);
         } else {
             int place = scoreTracker.getPlace(player);
-            String time = DurationFormatUtils.formatDuration(-playerScore.score().score(), "mm:ss");
+            String time = formatDuration(-playerScore.score().score());
             messenger.sendMessage("jumpAndRun.score", player, time, String.valueOf(place));
         }
     }
@@ -468,25 +570,59 @@ public class JumpAndRunGame implements Game, Listener {
     private static final class JnrRun {
         private final String key;
         private int checkpoint;
+        private int fails;
         private long startedAt;
 
-        private JnrRun(String key, int checkpoint, long startedAt) {
+        private JnrRun(String key, int checkpoint, int fails, long startedAt) {
             this.key = key;
             this.checkpoint = checkpoint;
             this.startedAt = startedAt;
+            this.fails = fails;
+        }
+
+        public void reset() {
+            checkpoint = 0;
+            fails = 0;
+            startedAt = System.currentTimeMillis();
         }
 
         public static JnrRun getOrCreate(Player player, String key) {
             PersistentDataContainer pdc = getJnrContainer(player, key);
             int checkpoint = pdc.getOrDefault(new NamespacedKey(EdenMinigames.instance(), "checkpoint"), PersistentDataType.INTEGER, 0);
             long startedAt = pdc.getOrDefault(new NamespacedKey(EdenMinigames.instance(), "startedAt"), PersistentDataType.LONG, System.currentTimeMillis());
-            return new JnrRun(key, checkpoint, startedAt);
+            int fails = pdc.getOrDefault(new NamespacedKey(EdenMinigames.instance(), "fails"), PersistentDataType.INTEGER, 0);
+            return new JnrRun(key, checkpoint, fails, startedAt);
         }
 
         public void save(Player player) {
             PersistentDataContainer pdc = getJnrContainer(player, key);
             pdc.set(new NamespacedKey(EdenMinigames.instance(), "checkpoint"), PersistentDataType.INTEGER, checkpoint);
             pdc.set(new NamespacedKey(EdenMinigames.instance(), "startedAt"), PersistentDataType.LONG, startedAt);
+            pdc.set(new NamespacedKey(EdenMinigames.instance(), "fails"), PersistentDataType.INTEGER, fails);
+            PersistentDataContainer jnrContainer = getJnrContainer(player);
+            jnrContainer.set(new NamespacedKey(EdenMinigames.instance(), key), PersistentDataType.TAG_CONTAINER, pdc);
+            PersistentDataContainer playerContainer = player.getPersistentDataContainer();
+            playerContainer.set(new NamespacedKey(EdenMinigames.instance(), "jnr"), PersistentDataType.TAG_CONTAINER, jnrContainer);
         }
+    }
+
+    private String formatDuration(long time) {
+        if (time < 0) time = -time;
+        long seconds = time / 1000;
+        long minutes = seconds / 60;
+        seconds %= 60;
+        long hours = minutes / 60;
+        minutes %= 60;
+
+        String timeString = "";
+        if (hours > 0) {
+            timeString += hours + "h:";
+        }
+        if (minutes > 0) {
+            timeString += "%02dm:".formatted(minutes);
+        }
+        timeString += "%02ds".formatted(seconds);
+
+        return timeString;
     }
 }

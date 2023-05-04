@@ -9,6 +9,8 @@ import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -22,6 +24,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.BoundingBox;
+import org.bukkit.util.Vector;
 
 import java.util.*;
 
@@ -75,6 +78,15 @@ public class TntFightArena implements Listener {
             player.setGameMode(GameMode.SURVIVAL);
             updateInventory(player);
         }
+        BoundingBox outerBox = new BoundingBox(
+                outerArea.getMinimumPoint().getX(),
+                outerArea.getMinimumPoint().getY(),
+                outerArea.getMinimumPoint().getZ(),
+                outerArea.getMaximumPoint().getX(),
+                outerArea.getMaximumPoint().getY(),
+                outerArea.getMaximumPoint().getZ()
+        );
+        world.getNearbyEntities(outerBox, e -> e instanceof Item).forEach(Entity::remove);
         for (BlockVector3 pos : area) {
             Block block = world.getBlockAt(pos.getBlockX(), pos.getBlockY(), pos.getBlockZ());
             if (block.getType() != Material.AIR &&
@@ -220,7 +232,9 @@ public class TntFightArena implements Listener {
                 default -> throw new IllegalStateException("Unexpected value: " + index);
             };
             Location location = block.getLocation().toCenterLocation();
-            location.getWorld().dropItem(location, new ItemStack(material));
+            Item item = location.getWorld().dropItem(location, new ItemStack(material));
+            item.setVelocity(new Vector(0, 0.5, 0));
+            item.setInvulnerable(true);
             return;
         }
 

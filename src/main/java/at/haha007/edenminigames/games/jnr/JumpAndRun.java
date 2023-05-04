@@ -157,12 +157,6 @@ public class JumpAndRun {
         checkPoints.add(checkPoint);
     }
 
-    public void addCheckpoint(Location location, int index) {
-        BlockVector3 pos = BlockVector3.at(location.getBlockX(), location.getBlockY(), location.getBlockZ());
-        CheckPoint checkPoint = new CheckPoint(pos, location.getYaw(), location.getPitch());
-        checkPoints.add(index, checkPoint);
-    }
-
     public int getNearestCheckpointIndex(Location location) {
         int index = -1;
         double minDistance = Double.MAX_VALUE;

@@ -27,6 +27,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
@@ -166,6 +167,12 @@ public class MenschGame implements Game, Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         if (!activePlayers().contains(player)) return;
         if (event.getSlotType() != InventoryType.SlotType.ARMOR) return;
+        event.setCancelled(true);
+    }
+
+    @EventHandler
+    private void onPlayerDropItem(PlayerDropItemEvent event){
+        if (!activePlayers().contains(event.getPlayer())) return;
         event.setCancelled(true);
     }
 

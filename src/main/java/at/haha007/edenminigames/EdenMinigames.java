@@ -21,7 +21,6 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.Reader;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -45,7 +44,6 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
             "creeper_madness", CreeperMadnessGame.class
     );
     private MessageHandler messageHandler;
-    private SqliteDatabase database;
     @Getter
     private PlaceholderManager placeholderManager;
 
@@ -54,12 +52,8 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
         instance = this;
 
         loadConfig();
-        database = new SqliteDatabase(this, "data.db");
-        try {
-            database.connect();
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
+
+        new CommandBlocker();
 
         //register minigames
         List<String> enabledGames = getConfig().getStringList("enabled");
@@ -100,11 +94,6 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
             placeholderManager = null;
         }
         registeredGames.clear();
-        try {
-            database.disconnect();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
 
         //unregister command
         command.unregister();
@@ -148,15 +137,7 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
         onEnable();
     }
 
-    public static <T extends Game> T getGame(Class<T> clazz) {
-        return instance.registeredGames.stream().filter(g -> g.getClass() == clazz).findAny().map(clazz::cast).orElse(null);
-    }
-
-    public static Class<? extends Game> getGameClass(String key) {
-        return instance().allGames.get(key);
-    }
-
-    public static boolean isBlocked(Player player) {
+    public static boolean isInGame(Player player) {
         return instance.registeredGames.stream().anyMatch(game -> game.activePlayers().contains(player));
     }
 
@@ -176,7 +157,4 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
         return instance().messageHandler;
     }
 
-    public static SqliteDatabase database() {
-        return instance().database;
-    }
 }

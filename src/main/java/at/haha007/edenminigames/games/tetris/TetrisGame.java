@@ -1,10 +1,16 @@
 package at.haha007.edenminigames.games.tetris;
 
 import at.haha007.edencommands.CommandContext;
+import at.haha007.edencommands.CommandRegistry;
 import at.haha007.edencommands.annotations.AnnotatedCommandLoader;
 import at.haha007.edencommands.annotations.Command;
 import at.haha007.edencommands.annotations.SyncCommand;
+import at.haha007.edencommands.argument.Completion;
+import at.haha007.edencommands.argument.IntegerArgument;
+import at.haha007.edencommands.argument.player.OfflinePlayerArgument;
+import at.haha007.edencommands.tree.ArgumentCommandNode;
 import at.haha007.edencommands.tree.LiteralCommandNode;
+import at.haha007.edencommands.tree.LiteralCommandNode.LiteralCommandBuilder;
 import at.haha007.edenminigames.EdenMinigames;
 import at.haha007.edenminigames.games.Game;
 import at.haha007.edenminigames.utils.ConfigUtils;
@@ -19,11 +25,11 @@ import com.sk89q.worldedit.world.World;
 import com.sk89q.worldedit.world.block.BlockState;
 import com.sk89q.worldedit.world.block.BlockTypes;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -34,6 +40,9 @@ import org.bukkit.inventory.ItemStack;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.TreeSet;
+import java.util.UUID;
+import java.util.stream.Stream;
 
 public class TetrisGame implements Game, Listener {
     private static final BlockState[] placedPieceColors = {
@@ -205,9 +214,58 @@ public class TetrisGame implements Game, Listener {
         this.lobbyCenter = new Location(location.getWorld(), lobbyCenter.getX(), lobbyCenter.getY(), lobbyCenter.getZ());
         lobbyRadius = lobbySection.getDouble("radius");
         Bukkit.getPluginManager().registerEvents(this, EdenMinigames.instance());
+
+        CommandRegistry registry = EdenMinigames.instance().commandRegistry();
+        LiteralCommandBuilder cmd = LiteralCommandNode.builder("tetristop");
+        cmd.executor(c -> sendTetrisTop(c.sender(), 1));
+        IntegerArgument argument = IntegerArgument.builder().completions(Stream.of(1, 2, 3).map(Completion::new).toList()).build();
+        cmd.then(ArgumentCommandNode.builder("page", argument).executor(c -> sendTetrisTop(c.sender(), c.parameter("page"))));
+        cmd.requires(CommandRegistry.permission("minigames.tetris.top"));
+        LiteralCommandBuilder remove = LiteralCommandNode.builder("remove");
+        remove.requires(CommandRegistry.permission("minigames.tetris.top.remove"));
+        remove.then(ArgumentCommandNode.builder("player", OfflinePlayerArgument.builder().build()).executor(c -> {
+            OfflinePlayer player = c.parameter("player");
+            if(player instanceof Player p ) {
+                scoreTracker.removeScore(p);
+                c.sender().sendMessage(Component.text("Removed " + p.getName() + " from the Tetris leaderboard!"));
+                return;
+            }
+            TreeSet<ScoreTracker.PlayerScore> scores = scoreTracker.getScores();
+            UUID uuid = player.getUniqueId();
+            if (scores.removeIf(s -> s.uuid().equals(uuid))) {
+                c.sender().sendMessage(Component.text("Removed " + player.getName() + " from the Tetris leaderboard!"));
+            } else {
+                c.sender().sendMessage(Component.text("Player " + player.getName() + " was not on the Tetris leaderboard!"));
+            }
+            scoreTracker.saveAsync();
+        }));
+        cmd.then(remove);
+        registry.register(cmd.build());
+    }
+
+    private void sendTetrisTop(CommandSender sender, int page){
+        if(!(sender instanceof Player messageTarget)) {
+            sender.sendMessage(Component.text("Only players can use this command!"));
+            return;
+        }
+        List<ScoreTracker.PlayerScore> scores = scoreTracker.asList();
+        if (scores.size() == 0) {
+            EdenMinigames.messenger().sendMessage("tetris.no-scores", messageTarget);
+            return;
+        }
+        int from = (page - 1) * 10;
+        int to = Math.min(from + 10, scores.size());
+        EdenMinigames.messenger().sendMessage("tetris.top_header", messageTarget, String.valueOf(page), String.valueOf((scores.size() - 1) / 10 + 1));
+        for (int i = from; i < to; i++) {
+            ScoreTracker.PlayerScore score = scores.get(i);
+            String name = score.name();
+            long value = score.score().score();
+            EdenMinigames.messenger().sendMessage("tetris.top_entry", messageTarget, String.valueOf(i + 1), name, String.valueOf(value));
+        }
     }
 
     private void start(Player player) {
+        if (this.player != null) throw new RuntimeException("Tetris game already started!");
         this.player = player;
         player.getInventory().clear();
         player.getInventory().setItem(4, new ItemStack(Material.STICK, 1));
@@ -444,30 +502,11 @@ public class TetrisGame implements Game, Listener {
     }
 
     @Override
-    public void initCommand(LiteralCommandNode.LiteralCommandBuilder cmd) {
+    public void initCommand(LiteralCommandBuilder cmd) {
         AnnotatedCommandLoader annotatedCommandLoader = new AnnotatedCommandLoader(EdenMinigames.instance());
         annotatedCommandLoader.addDefaultArgumentParsers();
         annotatedCommandLoader.addAnnotated(this);
         annotatedCommandLoader.getCommands().forEach(cmd::then);
-    }
-
-    @Command("top page{type:int} target{type:player}")
-    private void topCommand(CommandContext context) {
-        int page = context.parameter("page");
-        Player target = context.parameter("target");
-        List<ScoreTracker.PlayerScore> scores = scoreTracker.asList();
-        if (scores.size() == 0) {
-            EdenMinigames.messenger().sendMessage("tetris.no-scores", target);
-            return;
-        }
-        int from = (page - 1) * 10;
-        int to = Math.min(from + 10, scores.size());
-        EdenMinigames.messenger().sendMessage("tetris.top_header", target, String.valueOf(page), String.valueOf((scores.size() - 1) / 10 + 1));
-        for (int i = from; i < to; i++) {
-            ScoreTracker.PlayerScore score = scores.get(i);
-            String displayName = LegacyComponentSerializer.legacySection().serialize(MiniMessage.miniMessage().deserialize(score.displayName()));
-            EdenMinigames.messenger().sendMessage("tetris.top_entry", target, String.valueOf(i + 1), displayName, String.valueOf(score.score()));
-        }
     }
 
     @Command("score player{type:player}")
@@ -486,6 +525,10 @@ public class TetrisGame implements Game, Listener {
     @Command("start")
     @SyncCommand
     private void startCommand(CommandContext context) {
+        if (this.player != null) {
+            context.sender().sendMessage(Component.text("Game already started"));
+            return;
+        }
         List<Player> players = List.copyOf(lobbyCenter.getNearbyPlayers(lobbyRadius));
         if (players.size() == 0) {
             context.sender().sendMessage(Component.text("No players found"));

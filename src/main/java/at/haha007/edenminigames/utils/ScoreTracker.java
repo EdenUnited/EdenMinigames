@@ -2,6 +2,7 @@ package at.haha007.edenminigames.utils;
 
 import at.haha007.edenminigames.EdenMinigames;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
@@ -22,7 +23,7 @@ public class ScoreTracker {
     private static final NamespacedKey SCORES_KEY = new NamespacedKey(EdenMinigames.instance(), "score");
     private final String key;
     private final int maxSavedScores;
-    private final TreeSet<PlayerScore> scores = new TreeSet<>(Comparator.comparingLong(s -> s.score().score()));
+    private final TreeSet<PlayerScore> scores = new TreeSet<>(Comparator.comparingLong(s -> -s.score().score()));
 
     public ScoreTracker(String key, int maxSavedScores) {
         this.key = key;
@@ -81,6 +82,7 @@ public class ScoreTracker {
         long time = System.currentTimeMillis();
         String name = player.getName();
         String displayName = MiniMessage.miniMessage().serialize(player.displayName());
+        displayName = MiniMessage.miniMessage().serialize(LegacyComponentSerializer.legacySection().deserialize(displayName));
         UUID uuid = player.getUniqueId();
         Score s = new Score(score, time);
         PlayerScore ps = new PlayerScore(s, uuid, name, displayName);
@@ -98,6 +100,15 @@ public class ScoreTracker {
         PersistentDataContainer scoresPdc = playerPdc.getOrDefault(SCORES_KEY, PersistentDataType.TAG_CONTAINER, ac.newPersistentDataContainer());
         NamespacedKey key = new NamespacedKey(EdenMinigames.instance(), this.key);
         scoresPdc.set(key, PersistentDataType.LONG, score);
+        playerPdc.set(SCORES_KEY, PersistentDataType.TAG_CONTAINER, scoresPdc);
+    }
+
+    private void removeFromPdc(Player player) {
+        PersistentDataContainer playerPdc = player.getPersistentDataContainer();
+        PersistentDataAdapterContext ac = player.getPersistentDataContainer().getAdapterContext();
+        PersistentDataContainer scoresPdc = playerPdc.getOrDefault(SCORES_KEY, PersistentDataType.TAG_CONTAINER, ac.newPersistentDataContainer());
+        NamespacedKey key = new NamespacedKey(EdenMinigames.instance(), this.key);
+        scoresPdc.remove(key);
         playerPdc.set(SCORES_KEY, PersistentDataType.TAG_CONTAINER, scoresPdc);
     }
 
@@ -145,6 +156,12 @@ public class ScoreTracker {
         return null;
     }
 
+    public void removeScore(Player player) {
+        scores.removeIf(s -> s.uuid().equals(player.getUniqueId()));
+        removeFromPdc(player);
+        saveAsync();
+    }
+
     public record PlayerScore(Score score, UUID uuid, String name, String displayName) {
         private static PlayerScore fromYaml(ConfigurationSection section) {
             long score = section.getLong("score");
@@ -153,7 +170,8 @@ public class ScoreTracker {
             if (uuidString == null) throw new IllegalArgumentException("uuid is null");
             UUID uuid = UUID.fromString(uuidString);
             String name = section.getString("name");
-            String displayName = section.getString("displayName");
+            String displayName = section.getString("displayName", "null");
+            displayName = MiniMessage.miniMessage().serialize(LegacyComponentSerializer.legacySection().deserialize(displayName));
             Score sc = new Score(score, time);
             return new PlayerScore(sc, uuid, name, displayName);
         }

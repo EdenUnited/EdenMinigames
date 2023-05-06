@@ -24,7 +24,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerDropItemEvent;
@@ -190,6 +192,23 @@ public class MenschGame implements Game, Listener {
         if (playerIndex == -1) return;
         Location to = event.getTo();
         if (box.contains(to.toVector()) && player.getWorld() == lobby.getWorld()) return;
+        tpToRespawn(playerIndex);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    private void onDamage(EntityDamageEvent event){
+        if(!(event.getEntity() instanceof Player player)) return;
+        if(!activePlayers().contains(player)) return;
+        event.setCancelled(true);
+        int playerIndex = -1;
+        for (int i = 0; i < players.length; i++) {
+            Player p = players[i];
+            if (p == player) {
+                playerIndex = i;
+                break;
+            }
+        }
+        if (playerIndex == -1) return;
         tpToRespawn(playerIndex);
     }
 

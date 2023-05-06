@@ -23,10 +23,9 @@ import java.util.List;
 import java.util.Map;
 
 public class MinigameCommand {
-    private final CommandRegistry registry;
 
     public MinigameCommand(String name) {
-        registry = new CommandRegistry(EdenMinigames.instance());
+        CommandRegistry registry = EdenMinigames.instance().commandRegistry();
         LiteralCommandBuilder cmd = LiteralCommandNode.builder(name.toLowerCase());
         cmd.requires(CommandRegistry.permission("minigames.command"));
         AnnotatedCommandLoader loader = new AnnotatedCommandLoader(EdenMinigames.instance());
@@ -100,10 +99,5 @@ public class MinigameCommand {
         EdenMinigames plugin = EdenMinigames.instance();
         plugin.reload();
         context.sender().sendMessage(Component.text("Reloaded!"));
-    }
-
-
-    public void unregister() {
-        registry.destroy();
     }
 }

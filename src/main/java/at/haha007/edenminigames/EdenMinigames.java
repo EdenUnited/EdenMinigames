@@ -1,5 +1,6 @@
 package at.haha007.edenminigames;
 
+import at.haha007.edencommands.CommandRegistry;
 import at.haha007.edenminigames.games.Game;
 import at.haha007.edenminigames.games.connectfour.ConnectFourGame;
 import at.haha007.edenminigames.games.creepermadness.CreeperMadnessGame;
@@ -11,6 +12,7 @@ import at.haha007.edenminigames.message.MessageHandler;
 import at.haha007.edenminigames.placeholder.PlaceholderManager;
 import lombok.Getter;
 import lombok.experimental.Accessors;
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -31,7 +33,8 @@ import java.util.logging.Logger;
 public final class EdenMinigames extends JavaPlugin implements Listener {
 
     private static EdenMinigames instance;
-    private MinigameCommand command;
+    @Getter
+    private CommandRegistry commandRegistry;
     @Getter
     private final List<Game> registeredGames = new ArrayList<>();
     @Getter
@@ -50,7 +53,7 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         instance = this;
-
+        commandRegistry = new CommandRegistry(this);
         loadConfig();
 
         new CommandBlocker();
@@ -77,7 +80,7 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
         placeholderManager = new PlaceholderManager();
         placeholderManager.register();
 
-        command = new MinigameCommand(getConfig().getString("command", "games"));
+        new MinigameCommand(getConfig().getString("command", "games"));
 
         saveConfig();
         getServer().getPluginManager().registerEvents(this, this);
@@ -96,8 +99,9 @@ public final class EdenMinigames extends JavaPlugin implements Listener {
         registeredGames.clear();
 
         //unregister command
-        command.unregister();
+        commandRegistry.destroy();
         HandlerList.unregisterAll((Plugin) this);
+        Bukkit.getScheduler().cancelTasks(this);
     }
 
     private void loadConfig() {

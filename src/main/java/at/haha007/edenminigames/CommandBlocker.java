@@ -1,5 +1,7 @@
 package at.haha007.edenminigames;
 
+import at.haha007.edencommands.CommandRegistry;
+import at.haha007.edencommands.tree.LiteralCommandNode;
 import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -16,9 +18,19 @@ public class CommandBlocker implements Listener {
     private final List<String> allowedCommands = new ArrayList<>();
 
     public CommandBlocker() {
+        CommandRegistry registry = EdenMinigames.instance().commandRegistry();
+        registry.register(LiteralCommandNode.builder("commandblocker").executor(c -> {
+            loadCommands();
+        }).build());
+        loadCommands();
+        Bukkit.getPluginManager().registerEvents(this, EdenMinigames.instance());
+    }
+
+    private void loadCommands() {
         File allowedCommandsFile = new File(EdenMinigames.instance().getDataFolder(), "allowed_commands.txt");
-        if(!allowedCommandsFile.exists())
+        if (!allowedCommandsFile.exists())
             EdenMinigames.instance().saveResource("allowed_commands.txt", false);
+        allowedCommands.clear();
         //read text from file
         try (FileReader fileReader = new FileReader(allowedCommandsFile);
              BufferedReader reader = new BufferedReader(fileReader)) {
@@ -29,7 +41,6 @@ public class CommandBlocker implements Listener {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        Bukkit.getPluginManager().registerEvents(this, EdenMinigames.instance());
     }
 
     @EventHandler
@@ -38,6 +49,7 @@ public class CommandBlocker implements Listener {
         if (!EdenMinigames.isInGame(event.getPlayer())) return;
         String command = event.getMessage().split(" ")[0].substring(1).toLowerCase();
         if (allowedCommands.contains(command)) return;
+        EdenMinigames.messenger().sendMessage("command_blocker.blocked", event.getPlayer());
         event.setCancelled(true);
     }
 }

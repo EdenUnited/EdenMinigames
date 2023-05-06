@@ -95,6 +95,12 @@ public class TntFightArena implements Listener {
             boolean hay = Math.random() < 0.5;
             block.setType(hay ? Material.HAY_BLOCK : Material.AIR);
         }
+        spawns.stream().map(Location::getBlock)
+                .map(b -> List.of(b, b.getRelative(BlockFace.WEST), b.getRelative(BlockFace.NORTH), b.getRelative(BlockFace.EAST), b.getRelative(BlockFace.SOUTH),
+                        b.getRelative(BlockFace.NORTH_WEST), b.getRelative(BlockFace.NORTH_EAST), b.getRelative(BlockFace.SOUTH_WEST), b.getRelative(BlockFace.SOUTH_EAST)))
+                .flatMap(Collection::stream)
+                .filter(b -> b.getType() == Material.HAY_BLOCK)
+                .forEach(b -> b.setType(Material.AIR));
     }
 
     public String getKey() {

@@ -81,7 +81,8 @@ public class CreeperMadnessGame implements Game, Listener {
         Bukkit.getPluginManager().registerEvents(this, EdenMinigames.instance());
     }
 
-    private void start(Collection<Player> players) {
+
+    private void scheduleStart(Collection<Player> players) {
         if (players.size() < 2) return;
         Random random = new Random();
         //get random schematic
@@ -96,8 +97,16 @@ public class CreeperMadnessGame implements Game, Listener {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        Bukkit.getScheduler().scheduleSyncDelayedTask(EdenMinigames.instance(), () -> start(players), 10);
+    }
+
+    private void start(Collection<Player> players) {
+        Random random = new Random();
         this.players.addAll(players);
         this.players.removeIf(Objects::isNull);
+        this.players.removeIf(p -> !p.isOnline());
+        checkWin();
+        if (this.players.isEmpty()) return;
         tick = 0;
         players.forEach(player -> {
             Block target = null;
@@ -159,8 +168,8 @@ public class CreeperMadnessGame implements Game, Listener {
     }
 
     @EventHandler
-    void onPlayerDropItem(PlayerDropItemEvent event){
-        if(!players.contains(event.getPlayer())) return;
+    void onPlayerDropItem(PlayerDropItemEvent event) {
+        if (!players.contains(event.getPlayer())) return;
         event.setCancelled(true);
     }
 
@@ -239,12 +248,12 @@ public class CreeperMadnessGame implements Game, Listener {
             return;
         }
         var players = lobby.getNearbyPlayers(lobbyDistance);
-        start(players);
-        if (activePlayers().isEmpty()) {
+        if (players.size() < 2) {
             context.sender().sendMessage(Component.text("Not enough players!"));
-        } else {
-            context.sender().sendMessage(Component.text("Started game with " + activePlayers().size() + " players"));
+            return;
         }
+        context.sender().sendMessage(Component.text("Started game with " + activePlayers().size() + " players"));
+        scheduleStart(players);
     }
 
     @Command("list")

@@ -23,7 +23,8 @@ public class MessageHandler {
         //load configs
         File file = new File(plugin.getDataFolder(), "messages.yml");
         Reader resource = new InputStreamReader(Objects.requireNonNull(plugin.getResource("messages.yml")));
-        plugin.saveResource("messages.yml", false);
+        if (!file.exists())
+            plugin.saveResource("messages.yml", false);
         YamlConfiguration cfg = YamlConfiguration.loadConfiguration(file);
         YamlConfiguration defaults = YamlConfiguration.loadConfiguration(resource);
 

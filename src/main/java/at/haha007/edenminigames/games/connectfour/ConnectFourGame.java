@@ -78,11 +78,25 @@ public class ConnectFourGame implements Game, Listener {
                 drawBoard();
                 if (checkWin())
                     return;
+                if(isBoardFull()) {
+                    broadcastMessage("connect4.draw", player);
+                    stop(null);
+                    return;
+                }
                 player = activePlayer ? playerA : playerB;
                 broadcastMessage("connect4.next_player", player);
                 return;
             }
         }
+    }
+
+    private boolean isBoardFull() {
+        for (int[] column : board) {
+            for (int i : column) {
+                if (i == 0) return false;
+            }
+        }
+        return true;
     }
 
     private void drawBoard() {
@@ -131,7 +145,7 @@ public class ConnectFourGame implements Game, Listener {
                     for (BlockVector2 blockVector2 : list) {
                         board[blockVector2.getBlockX()][blockVector2.getBlockZ()] = activePlayer ? 4 : 3;
                     }
-                    stop(activePlayer ? playerB : playerA);
+                    stop(activePlayer ? playerA : playerB);
                     return true;
                 }
             }
@@ -206,11 +220,15 @@ public class ConnectFourGame implements Game, Listener {
 
     @Override
     public void stop(Player loser) {
-        if (loser == null) return;
+        if (loser != playerA && loser != playerB && loser != null) return;
         if (playerA == null || playerB == null) return;
-        if (loser != playerA && loser != playerB) return;
-        Player winner = loser == playerA ? playerB : playerA;
-        broadcastMessage("connect4.game_over", winner, LegacyComponentSerializer.legacySection().serialize(loser.displayName()));
+        if (loser == null) {
+            broadcastMessage("connect4.draw", playerA);
+            return;
+        }else{
+            Player winner = loser == playerA ? playerB : playerA;
+            broadcastMessage("connect4.game_over", winner, LegacyComponentSerializer.legacySection().serialize(loser.displayName()));
+        }
         playerA = null;
         playerB = null;
         drawBoard();

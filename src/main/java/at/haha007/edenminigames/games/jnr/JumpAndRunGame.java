@@ -29,7 +29,6 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import org.apache.commons.lang3.time.DurationFormatUtils;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
@@ -124,7 +123,7 @@ public class JumpAndRunGame implements Game, Listener {
             ScoreTracker scoreTracker = getScoreTracker(jnr.getKey());
             if (player instanceof Player p) {
                 scoreTracker.removeScore(p);
-                c.sender().sendMessage(Component.text("Removed " + p.getName() + " from the Tetris leaderboard!"));
+                c.sender().sendMessage(Component.text("Removed " + p.getName() + " from the " + jnr.getKey() + " leaderboard!"));
                 return;
             }
             TreeSet<ScoreTracker.PlayerScore> scores = scoreTracker.getScores();
@@ -156,10 +155,10 @@ public class JumpAndRunGame implements Game, Listener {
         List<ScoreTracker.PlayerScore> scores = scoreTracker.asList();
         int from = (page - 1) * 10;
         int to = Math.min(from + 10, scores.size());
-        messenger.sendMessage("jumpAndRun.top_header", player, String.valueOf(page), String.valueOf((scores.size() + 9) / 10), String.valueOf(scores.size()));
+        messenger.sendMessage("jumpAndRun.top_header", player, key);
         for (int i = from; i < to; i++) {
             ScoreTracker.PlayerScore score = scores.get(i);
-            String time = DurationFormatUtils.formatDuration(-score.score().score(), "mm:ss");
+            String time = formatDuration(score.score().score());
             messenger.sendMessage("jumpAndRun.top_entry", player, String.valueOf(i + 1), score.name(), time);
         }
     }

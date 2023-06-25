@@ -89,18 +89,48 @@ public class CreeperMadnessGame implements Game, Listener {
         File[] schematics = new File(EdenMinigames.instance().getDataFolder(), "schematics/creeper_madness").listFiles();
         if (schematics == null) throw new RuntimeException("No schematics found");
         File schematicFile = schematics[random.nextInt(schematics.length)];
+        scheduleStart(players, schematicFile);
+    }
+
+    private void scheduleStart(Collection<Player> players, File schematicFile) {
+        if (players.size() < 2) return;
+        int[][] heightMap;
         try (Clipboard clipboard = BuiltInClipboardFormat.FAST.load(schematicFile)) {
+            heightMap = new int[clipboard.getDimensions().getBlockX()][clipboard.getDimensions().getBlockZ()];
             Vector min = box.getMin();
             BlockVector3 at = BlockVector3.at(min.getX(), min.getY(), min.getZ());
             EditSession es = clipboard.paste(BukkitAdapter.adapt(world), at);
             es.close();
+            for (int x = 0; x < clipboard.getDimensions().getBlockX(); x++) {
+                for (int z = 0; z < clipboard.getDimensions().getBlockZ(); z++) {
+                    for (int y = clipboard.getDimensions().getBlockY() - 1; y >= 0; y--) {
+                        if (!es.getBlock(BlockVector3.at(x, y, z).add(at)).getBlockType().getMaterial().isSolid())
+                            continue;
+                        heightMap[x][z] = y;
+                        break;
+                    }
+                }
+            }
+            BukkitAdapter.adapt(world).flush();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        Bukkit.getScheduler().scheduleSyncDelayedTask(EdenMinigames.instance(), () -> start(players), 10);
+        BlockVector3 origin = BlockVector3.at(box.getMinX(), box.getMinY(), box.getMinZ());
+        List<BlockVector3> topBlocks = new ArrayList<>();
+        for (int x = 0; x < heightMap.length; x++) {
+            for (int z = 0; z < heightMap[x].length; z++) {
+                int y = heightMap[x][z];
+                if (y == 0) continue;
+                BlockVector3 block = origin.add(x, y, z);
+                BlockVector3 topBlock = block.add(0, 1, 0);
+                if (topBlock.getBlockY() > box.getMaxY()) continue;
+                topBlocks.add(topBlock);
+            }
+        }
+        Bukkit.getScheduler().scheduleSyncDelayedTask(EdenMinigames.instance(), () -> start(players, topBlocks), 20);
     }
 
-    private void start(Collection<Player> players) {
+    private void start(Collection<Player> players, List<BlockVector3> spawns) {
         Random random = new Random();
         this.players.addAll(players);
         this.players.removeIf(Objects::isNull);
@@ -109,17 +139,9 @@ public class CreeperMadnessGame implements Game, Listener {
         if (this.players.isEmpty()) return;
         tick = 0;
         players.forEach(player -> {
-            Block target = null;
-            for (int i = 0; i < 100; i++) {
-                int x = random.nextInt((int) box.getMinX(), (int) box.getMaxX());
-                int z = random.nextInt((int) box.getMinZ(), (int) box.getMaxZ());
-                int y = world.getHighestBlockYAt(x, z);
-                if (y < box.getMinY()) continue;
-                target = world.getBlockAt(x, y, z);
-                break;
-            }
-            if (target == null) target = box.getCenter().toLocation(world).getBlock();
-            Location tpTarget = target.getLocation().add(0.5, 1, 0.5);
+            BlockVector3 spawn = spawns.get(random.nextInt(spawns.size()));
+            Block target = world.getBlockAt(spawn.getBlockX(), spawn.getBlockY() - 1, spawn.getBlockZ());
+            Location tpTarget = target.getLocation().add(0.5, 2, 0.5);
             tpTarget.setYaw(random.nextInt(360));
             player.teleport(tpTarget);
             ItemStack weight = this.feather.clone();
@@ -138,7 +160,7 @@ public class CreeperMadnessGame implements Game, Listener {
     private void tick() {
         if (players.isEmpty()) return;
         tick++;
-        players.stream().filter(player -> player.getLocation().getY() < box.getMinY()).toList().forEach(this::stop);
+        players.stream().filter(player -> player.getLocation().getY() < box.getMinY() - 20).toList().forEach(this::stop);
         if (tick < startTicks) return;
         double tickRate = (10000 / (tick - 300d) + 1);
         if (tick % tickRate < 1) {
@@ -256,6 +278,28 @@ public class CreeperMadnessGame implements Game, Listener {
         scheduleStart(players);
     }
 
+    @Command("start map{type:string}")
+    @SyncCommand
+    private void startMap(CommandContext context) {
+        if (!activePlayers().isEmpty()) {
+            context.sender().sendMessage(Component.text("Game is already running!"));
+            return;
+        }
+        var players = lobby.getNearbyPlayers(lobbyDistance);
+        if (players.size() < 2) {
+            context.sender().sendMessage(Component.text("Not enough players!"));
+            return;
+        }
+        String map = context.parameter("map");
+        File file = schematicFile(map);
+        if(!file.exists()){
+            context.sender().sendMessage(Component.text("Map not found!"));
+            return;
+        }
+        context.sender().sendMessage(Component.text("Started game with " + activePlayers().size() + " players"));
+        scheduleStart(players, file);
+    }
+
     @Command("list")
     private void list(CommandContext context) {
         File schemFolder = new File(EdenMinigames.instance().getDataFolder(), "schematics/creeper_madness");
@@ -341,7 +385,10 @@ public class CreeperMadnessGame implements Game, Listener {
         int x = (int) (Math.random() * box.getWidthX()) + (int) box.getMinX();
         int z = (int) (Math.random() * box.getWidthZ()) + (int) box.getMinZ();
         int y = (int) (box.getMaxY() + 20);
-        Block heighest = world.getHighestBlockAt(x, z, HeightMap.WORLD_SURFACE);
+        Block heighest = world.getBlockAt(x, y - 20, z);
+        while (heighest.isEmpty() && heighest.getY() >= box.getMinY()) {
+            heighest = heighest.getRelative(BlockFace.DOWN);
+        }
         if (heighest.getY() < box.getMinY()) return false;
         Location loc = heighest.getLocation().toCenterLocation();
         loc.setY(y);
